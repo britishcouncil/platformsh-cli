@@ -116,6 +116,9 @@ class Application extends ParentApplication
         $commands[] = new Command\Domain\DomainGetCommand();
         $commands[] = new Command\Domain\DomainListCommand();
         $commands[] = new Command\Domain\DomainUpdateCommand();
+        $commands[] = new Command\Drupal\DrupalSanitizeDbCommand();
+        $commands[] = new Command\Drupal\DrupalDbSyncCommand();
+        $commands[] = new Command\Drupal\DrupalUncleanFeaturesCommand();
         $commands[] = new Command\Environment\EnvironmentActivateCommand();
         $commands[] = new Command\Environment\EnvironmentBranchCommand();
         $commands[] = new Command\Environment\EnvironmentCheckoutCommand();
@@ -142,8 +145,9 @@ class Application extends ParentApplication
         $commands[] = new Command\Integration\IntegrationUpdateCommand();
         $commands[] = new Command\Local\LocalBuildCommand();
         $commands[] = new Command\Local\LocalCleanCommand();
-        $commands[] = new Command\Local\LocalDrushAliasesCommand();
         $commands[] = new Command\Local\LocalDirCommand();
+        $commands[] = new Command\Local\LocalDropDatabasesCommand();
+        $commands[] = new Command\Local\LocalDrushAliasesCommand();
         $commands[] = new Command\Project\ProjectCreateCommand();
         $commands[] = new Command\Project\ProjectDeleteCommand();
         $commands[] = new Command\Project\ProjectGetCommand();
