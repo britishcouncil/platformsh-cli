@@ -11,6 +11,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class EnvironmentEradicateCommand extends CommandBase {
   protected function configure() {
     $this->setName('environment:eradicate')
+         ->setAliases(['eradicate'])
          ->setDescription('Delete an environment and the related branch without asking for confirmation')
          ->addArgument('url', InputArgument::IS_ARRAY, 'The URL of the environment to delete');
     $this->addExample('Delete the environments "test1" from project "refsklfzrwbvg"', 'http://test1-refsklfzrwbvg.bc.platform.sh/')
