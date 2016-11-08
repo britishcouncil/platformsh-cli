@@ -43,10 +43,12 @@ interface ToolstackInterface
      * @param CliConfig $config     CLI configuration.
      * @param array  $settings      Additional settings for the build.
      *     Possible settings include:
+     *     - clone (bool, default false) Clone the repository to the build
+     *       directory before building, where possible.
      *     - copy (bool, default false) Copy files instead of symlinking them,
      *       where possible.
-     *     - absoluteLinks (bool, default false) Use absolute paths in symlinks.
-     *     - noCache (bool, default false) Disable the package cache (if
+     *     - abslinks (bool, default false) Use absolute paths in symlinks.
+     *     - no-cache (bool, default false) Disable the package cache (if
      *       relevant and if the package manager supports this).
      *     - sourceDir (string) The source directory that contains the app(s).
      *     - multiApp (bool, default false) Whether there is more than 1 app in

@@ -109,10 +109,9 @@ class Drupal extends ToolstackBase
      */
     protected function checkIgnored($filename, $suggestion = null)
     {
-        if (empty($this->settings['sourceDir']) || !$this->gitHelper->isRepository($this->settings['sourceDir'])) {
+        if (!$repositoryDir = $this->gitHelper->getRoot($this->appRoot)) {
             return;
         }
-        $repositoryDir = $this->settings['sourceDir'];
         $relative = $this->fsHelper->makePathRelative($this->appRoot . '/' . $filename, $repositoryDir);
         if (!$this->gitHelper->execute(['check-ignore', $relative], $repositoryDir)) {
             $suggestion = $suggestion ?: $relative;
@@ -140,18 +139,18 @@ class Drupal extends ToolstackBase
             $drushFlags[] = '--verbose';
         }
 
-        if (!empty($this->settings['drushWorkingCopy'])) {
+        if (!empty($this->settings['working-copy'])) {
             $drushFlags[] = '--working-copy';
         }
 
-        if (!empty($this->settings['noCache'])) {
+        if (!empty($this->settings['no-cache'])) {
             $drushFlags[] = '--no-cache';
         } else {
             $drushFlags[] = '--cache-duration-releasexml=300';
         }
 
-        if (!empty($this->settings['drushConcurrency'])) {
-            $drushFlags[] = '--concurrency=' . $this->settings['drushConcurrency'];
+        if (!empty($this->settings['concurrency'])) {
+            $drushFlags[] = '--concurrency=' . $this->settings['concurrency'];
         }
 
         return $drushFlags;
@@ -176,7 +175,7 @@ class Drupal extends ToolstackBase
             'drupal-org.make.yml',
             'drupal-org.make',
         ];
-        if (empty($this->settings['drushUpdateLock'])) {
+        if (empty($this->settings['lock'])) {
             $candidates = array_merge([
                 'project.make.lock',
                 'project.make.yml.lock',
@@ -235,7 +234,7 @@ class Drupal extends ToolstackBase
         );
 
         // Create a lock file automatically.
-        if (!strpos($projectMake, '.lock') && version_compare($drushHelper->getVersion(), '7.0.0-rc1', '>=') && !empty($this->settings['drushUpdateLock'])) {
+        if (!strpos($projectMake, '.lock') && version_compare($drushHelper->getVersion(), '7.0.0-rc1', '>=') && !empty($this->settings['lock'])) {
             $args[] = "--lock=$projectMake.lock";
         }
 
@@ -280,7 +279,7 @@ class Drupal extends ToolstackBase
         $drushHelper = $this->getDrushHelper();
         $drushHelper->ensureInstalled();
         $drushFlags = $this->getDrushFlags();
-        $updateLock = version_compare($drushHelper->getVersion(), '7.0.0-rc1', '>=') && !empty($this->settings['drushUpdateLock']);
+        $updateLock = version_compare($drushHelper->getVersion(), '7.0.0-rc1', '>=') && !empty($this->settings['lock']);
 
         $projectMake = $this->findDrushMakeFile(true);
         $projectCoreMake = $this->findDrushMakeFile(true, true);
@@ -292,8 +291,14 @@ class Drupal extends ToolstackBase
         $profileDir = $drupalRoot . '/profiles/' . $profileName;
 
         if ($projectMake) {
+            // Create a temporary profile directory. If it already exists,
+            // ensure that it is empty.
             $tempProfileDir = $this->buildDir . '/tmp-' . $profileName;
+            if (file_exists($tempProfileDir)) {
+                $this->fsHelper->remove($tempProfileDir);
+            }
             $this->fsHelper->mkdir($tempProfileDir);
+
             $args = array_merge(
                 ['make', '--no-core', '--contrib-destination=.', $projectMake, $tempProfileDir],
                 $drushFlags
