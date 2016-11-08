@@ -45,6 +45,9 @@ local:
     elasticsearch_host: 'localhost'
     elasticsearch_port: 9200
 
+  integration:
+    github:
+
 # Details about the cloud service that the CLI works with.
 service:
   name: 'Platform.sh'
