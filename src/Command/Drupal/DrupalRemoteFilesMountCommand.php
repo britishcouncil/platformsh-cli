@@ -1,10 +1,9 @@
 <?php
 
-namespace Solas\Cli\Command;
+namespace Platformsh\Cli\Command\Drupal;
 
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Client\Model\Project;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
@@ -26,7 +25,16 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
 
     // Mount remote file share only if not mounted already.
     if (!$this->isMounted($project)) {
-      $command = sprintf('sshfs %s-%s@ssh.bc.platform.sh:/app/public/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect', $project->id, $this::$config->get('local.deploy.backup_environment'), $this->getProjectRoot());
+      $projectRoot = $this->getProjectRoot();
+      // v3.x and newer
+      if (basename($projectRoot) != 'repository') {
+        $sharedPath = $projectRoot . '/.platform/local';
+      }
+      // Legacy 2.x
+      else {
+        $sharedPath = dirname($projectRoot);
+      }
+      $command = sprintf('sshfs %s-%s@ssh.bc.platform.sh:/app/public/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect', $project->id, $this::$config->get('local.deploy.backup_environment'), $sharedPath);
       $sshfs = new Process($command);
       $sshfs->setTimeout($this::$config->get('local.deploy.external_process_timeout'));
       try {
