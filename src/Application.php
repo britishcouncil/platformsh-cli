@@ -119,6 +119,7 @@ class Application extends ParentApplication
         $commands[] = new Command\Domain\DomainUpdateCommand();
         $commands[] = new Command\Drupal\DrupalSanitizeDbCommand();
         $commands[] = new Command\Drupal\DrupalDbSyncCommand();
+        $commands[] = new Command\Drupal\DrupalDeployCommand();
         $commands[] = new Command\Drupal\DrupalRemoteFilesMountCommand();
         $commands[] = new Command\Drupal\DrupalUncleanFeaturesCommand();
         $commands[] = new Command\Environment\EnvironmentActivateCommand();
