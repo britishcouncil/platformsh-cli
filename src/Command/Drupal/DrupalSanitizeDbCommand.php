@@ -21,7 +21,7 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $project = $this->getSelectedProject();
-    $internal_site_code = $this->selectEnvironment($this::$config->get('local.deploy.backup_environment'))->getVariable($this::$config->get('service.internal_site_code_variable'))->value;
+    $internal_site_code = $this->selectEnvironment($this::$config->get('local.deploy.backup_environment'))->getVariable($this::$config->get('local.deploy.internal_site_code_variable'))->value;
 
     /* @var DrushHelper $dh */
     $dh = $this->getHelper('drush');
