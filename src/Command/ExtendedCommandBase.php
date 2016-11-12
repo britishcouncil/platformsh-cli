@@ -2,13 +2,17 @@
 
 namespace Platformsh\Cli\Command;
 
-use Platformsh\Cli\Command\CommandBase;
+use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 
 abstract class ExtendedCommandBase extends CommandBase {
+
+  protected $currentProject;
+  protected $profilesRootDir;
+  protected $sitesRootDir;
 
   /**
    * Extend 'validateInput' method.
@@ -43,6 +47,11 @@ abstract class ExtendedCommandBase extends CommandBase {
     }
 
     parent::validateInput($input, $envNotRequired);
+
+    // Some config.
+    $this->profilesRootDir = $this->expandTilde($this::$config->get('local.drupal.profiles_dir'));
+    $this->sitesRootDir = $this->expandTilde($this::$config->get('local.drupal.sites_dir'));
+    $this->currentProject['internal_site_code'] = $this->selectEnvironment($this::$config->get('local.deploy.backup_environment'))->getVariable($this::$config->get('local.deploy.internal_site_code_variable'))->value;
   }
 
   /**
@@ -98,18 +107,19 @@ abstract class ExtendedCommandBase extends CommandBase {
     $this->addArgument('directory', InputArgument::OPTIONAL, 'The directory where the project lives locally.');
     return $this;
   }
-  
-  
+
   /**
    * Check if GitHub integration is available by verifying the existence of the
    * expected GitHub repository.
    * @return bool|string
    */
-  protected function gitHubIntegrationAvailable($projectRepositoryDir) {
-    $this->git->setDefaultRepositoryDir($projectRepositoryDir);
-    return $this->git->execute([
+  protected function gitHubIntegrationAvailable() {
+    $git = $this->getHelper('git');
+    $git->ensureInstalled();
+    $git->setDefaultRepositoryDir($this->currentProject['repository']);
+    return $git->execute([
       'ls-remote',
-      $this->gitHubIntegrationURI,
+      $this::$config->get('local.integration.github_base_uri') . '/' . $this::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
       'HEAD'
     ]);
   }
@@ -124,81 +134,86 @@ abstract class ExtendedCommandBase extends CommandBase {
     // P.sh integrations API. Unfortunately, that API is only accessible by
     // users with administrative permissions, so they cannot be invoked if
     // the user deploying locally is a normal developer.
-    return file_exists($this->gitHubIntegrationFile);
+    return file_exists($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
   }
 
   /**
    * Enable GitHub integration locally for this project.
    */
-  public function enableGitHubIntegration($projectRepositoryDir) {
+  public function enableGitHubIntegration() {
     // Write file that indicates an integration is enabled.
     // Save original git URI in it.
-    chdir($projectRepositoryDir);
-    $this->git->setDefaultRepositoryDir($projectRepositoryDir);
-    file_put_contents($this->gitHubIntegrationFile, $this->git->getConfig('remote.platform.url'));
+    chdir($this->currentProject['repository']);
+    $git = $this->getHelper('git');
+    $git->ensureInstalled();
+    $git->setDefaultRepositoryDir($this->currentProject['repository']);
+    file_put_contents($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'),
+      $git->getConfig('remote.platform.url'));
     // Remove "platform" remote.
-    $this->git->execute([
+    $git->execute([
       'remote',
       'rm',
-      'platform'
+      'platform',
     ]);
     // Set the URL for "origin" remote to the GitHub repo.
-    $this->git->execute([
+    $git->execute([
       'remote',
       'set-url',
       'origin',
-      $this->gitHubIntegrationURI
+      $this::$config->get('local.integration.github_base_uri') . '/' . $this::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
     ]);
     // Fetch the remote.
-    $this->git->execute(['fetch', 'origin']);
+    $git->execute(['fetch', 'origin']);
     // Change upstream for currently selected branch.
-    $branch = $this->git->getCurrentBranch();
-    $this->git->execute([
+    $branch = $git->getCurrentBranch();
+    $git->execute([
       'branch',
       $branch,
       '--set-upstream',
       "origin/$branch"
     ]);
     // Pull the latest.
-    $this->git->execute(['pull']);
+    $git->execute(['pull']);
   }
 
   /**
    * Disable GitHub integration locally for this project.
    */
   public function disableGitHubIntegration($projectRepositoryDir) {
-    chdir($projectRepositoryDir);
-    $this->git->setDefaultRepositoryDir($projectRepositoryDir);
+    chdir($this->currentProject['repository']);
+    $git = $this->getHelper('git');
+    $git->ensureInstalled();
+    $git->setDefaultRepositoryDir($this->currentProject['repository']);
     // Retrieve original git URI.
-    $originalGitUri = file_get_contents($this->gitHubIntegrationFile);
+    $originalGitUri = file_get_contents($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
     // Remove file that indicates an integration is enabled.
-    unlink($this->gitHubIntegrationFile);
+    unlink($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
 
     // Restore remote "origin" to original URI.
-    $this->git->execute([
+    $git->execute([
       'remote',
       'set-url',
       'origin',
       $originalGitUri
     ]);
-    $this->git->execute([
+    $git->execute([
       'remote',
       'add',
       'platform',
       $originalGitUri
     ]);
     // Fetch the remote.
-    $this->git->execute(['fetch', 'platform']);
+    $git->execute(['fetch', 'platform']);
     // Restore upstream for currently selected branch.
-    $branch = $this->git->getCurrentBranch();
-    $this->git->execute([
+    $branch = $git->getCurrentBranch();
+    $git->execute([
       'branch',
       $branch,
       '--set-upstream',
       "platform/$branch"
     ]);
     // Pull the latest.
-    $this->git->execute(['pull']);
+    $git->execute(['pull']);
   }
 
   private function expandTilde($path) {
@@ -207,10 +222,5 @@ abstract class ExtendedCommandBase extends CommandBase {
       $path = str_replace('~', $info['dir'], $path);
     }
     return $path;
-  }
-  
-  private function getProjectGitHubIntegrationURI() {
-    $internal_site_code = $this->selectEnvironment($this::$config->get('local.deploy.backup_environment'))->getVariable($this::$config->get('service.internal_site_code_variable'))->value;
-    
   }
 }
