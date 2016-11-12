@@ -31,7 +31,7 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
     putenv('COLUMNS=512');
     $alias = basename(realpath($input->getArgument('directory')));
     $p = new Process("drush @$alias._local fl --status=enabled");
-    $p->setTimeout($this::$config->get('local.deploy.external_process_timeout'));
+    $p->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
     try {
       $p->mustRun();
       $output = array_filter(explode("\n", $p->getOutput()), function ($value) {

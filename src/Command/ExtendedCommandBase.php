@@ -49,9 +49,9 @@ abstract class ExtendedCommandBase extends CommandBase {
     parent::validateInput($input, $envNotRequired);
 
     // Some config.
-    $this->profilesRootDir = $this->expandTilde($this::$config->get('local.drupal.profiles_dir'));
-    $this->sitesRootDir = $this->expandTilde($this::$config->get('local.drupal.sites_dir'));
-    $this->currentProject['internal_site_code'] = $this->selectEnvironment($this::$config->get('local.deploy.backup_environment'))->getVariable($this::$config->get('local.deploy.internal_site_code_variable'))->value;
+    $this->profilesRootDir = $this->expandTilde(self::$config->get('local.drupal.profiles_dir'));
+    $this->sitesRootDir = $this->expandTilde(self::$config->get('local.drupal.sites_dir'));
+    $this->currentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.backup_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
   }
 
   /**
@@ -119,7 +119,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     $git->setDefaultRepositoryDir($this->currentProject['repository']);
     return $git->execute([
       'ls-remote',
-      $this::$config->get('local.integration.github_base_uri') . '/' . $this::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
+      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
       'HEAD'
     ]);
   }
@@ -134,7 +134,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     // P.sh integrations API. Unfortunately, that API is only accessible by
     // users with administrative permissions, so they cannot be invoked if
     // the user deploying locally is a normal developer.
-    return file_exists($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
+    return file_exists($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
   }
 
   /**
@@ -147,7 +147,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     $git = $this->getHelper('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($this->currentProject['repository']);
-    file_put_contents($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'),
+    file_put_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'),
       $git->getConfig('remote.platform.url'));
     // Remove "platform" remote.
     $git->execute([
@@ -160,7 +160,7 @@ abstract class ExtendedCommandBase extends CommandBase {
       'remote',
       'set-url',
       'origin',
-      $this::$config->get('local.integration.github_base_uri') . '/' . $this::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
+      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
     ]);
     // Fetch the remote.
     $git->execute(['fetch', 'origin']);
@@ -185,9 +185,9 @@ abstract class ExtendedCommandBase extends CommandBase {
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($this->currentProject['repository']);
     // Retrieve original git URI.
-    $originalGitUri = file_get_contents($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
+    $originalGitUri = file_get_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
     // Remove file that indicates an integration is enabled.
-    unlink($this->currentProject['root_dir'] . '/' . $this::$config->get('local.integration.github_local_flag_file'));
+    unlink($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
 
     // Restore remote "origin" to original URI.
     $git->execute([

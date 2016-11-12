@@ -4,6 +4,7 @@ namespace Platformsh\Cli\Command\Drupal;
 
 use Cocur\Slugify\Slugify;
 use Platformsh\Cli\Command\ExtendedCommandBase;
+use Platformsh\Cli\Helper\ShellHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -27,23 +28,29 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $project = $this->getSelectedProject();
     $slugify = new Slugify();
     $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
-    $backupPath = $this::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
+    $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
 
     $this->stdErr->writeln("<info>[*]</info> Importing live database backup for <info>" . $project->getProperty('title') . "</info> (" . $project->id . ")...");
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
-      $this->runOtherCommand('environment:sql-dump', [
-        '--project' => $project->id,
-        '--environment' => $this::$config->get('local.deploy.backup_environment'),
-        '--file' => $backupPath
-      ]);
+//      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.backup_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
+//      $sh = new ShellHelper();
+//      $sh->executeSimple($commandLine);
+//
+//      if (!file_exists($backupPath)) {
+        $this->runOtherCommand('environment:sql-dump', [
+          '--project' => $project->id,
+          '--environment' => self::$config->get('local.deploy.backup_environment'),
+          '--file' => $backupPath
+        ]);
+//      }
     }
     else {
       $this->stdErr->writeln("Retrieving backup from the cache: <info>$backupPath</info>");
     }
 
-    $dbName = $this::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
+    $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
 
     // If dump is present and sound.
     if (file_exists($backupPath) && filesize($backupPath) > 0) {
@@ -51,9 +58,9 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       $queries = array(
         "DROP DATABASE IF EXISTS $dbName",
         "CREATE DATABASE IF NOT EXISTS $dbName",
-        "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON $dbName.* TO '" . $this::$config->get('local.stack.mysql_user') . "'@'" . $this::$config->get('local.stack.mysql_host') . "' IDENTIFIED BY '" . $this::$config->get('local.stack.mysql_password') . "';"
+        "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON $dbName.* TO '" . self::$config->get('local.stack.mysql_user') . "'@'" . self::$config->get('local.stack.mysql_host') . "' IDENTIFIED BY '" . self::$config->get('local.stack.mysql_password') . "';"
       );
-      if ($connection = mysqli_connect($this::$config->get('local.stack.mysql_host'), $this::$config->get('local.stack.mysql_root_user'), $this::$config->get('local.stack.mysql_root_password'))) {
+      if ($connection = mysqli_connect(self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_root_user'), self::$config->get('local.stack.mysql_root_password'))) {
         foreach ($queries as $q) {
           mysqli_query($connection, $q);
         }
@@ -65,9 +72,9 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       }
 
       // Use mysql CLI for importing the SQL dump, as it's much more efficient.
-      $cmd = sprintf("cat %s | mysql -h%s -u%s -p%s --database %s", $backupPath, $this::$config->get('local.stack.mysql_host'), $this::$config->get('local.stack.mysql_root_user'), $this::$config->get('local.stack.mysql_root_password'), $dbName);
+      $cmd = sprintf("cat %s | mysql -h%s -u%s -p%s --database %s", $backupPath, self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_root_user'), self::$config->get('local.stack.mysql_root_password'), $dbName);
       $p = new Process($cmd);
-      $p->setTimeout($this::$config->get('local.deploy.external_process_timeout'));
+      $p->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
       try {
         $p->mustRun();
       }

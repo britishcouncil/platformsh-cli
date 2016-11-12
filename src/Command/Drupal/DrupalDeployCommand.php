@@ -177,7 +177,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Make sure settings.local.php is up to date for the project.
     $slugify = new Slugify();
     $slugifiedProjectTitle = str_replace('-', '_', $project->title ? $slugify->slugify($project->title) : $project->id);
-    $settings_local_php = sprintf(file_get_contents("/vagrant/etc/cli/resources/drupal/settings.local.php"), $this::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, $this::$config->get('local.stack.mysql_user'), $this::$config->get('local.stack.mysql_password'), $this::$config->get('local.stack.mysql_host'), $this::$config->get('local.stack.mysql_port'));
+    $settings_local_php = sprintf(file_get_contents("/vagrant/etc/cli/resources/drupal/settings.local.php"), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
       $sharedPath = $this->getProjectRoot() . '/.platform/local';
@@ -247,7 +247,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->stdErr->writeln("<info>[*]</info> Fetching <info>" . $project->getProperty('title') . "</info> (" . $project->id . ") for the first time...");
     $this->runOtherCommand('project:get', [
       '--yes' => TRUE,
-      '--environment' => $this::$config->get('local.deploy.git_default_branch'),
+      '--environment' => self::$config->get('local.deploy.git_default_branch'),
       'id' => $project->id,
       'directory' => $this->currentProject['root_dir'],
     ]);
@@ -282,7 +282,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $git->execute(array(
       'pull',
       'origin',
-      $this::$config->get('local.deploy.git_default_branch'),
+      self::$config->get('local.deploy.git_default_branch'),
     ));
     $this->stdErr->writeln("\t<info>[ok]</info>");
   }
