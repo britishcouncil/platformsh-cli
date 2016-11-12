@@ -29,10 +29,12 @@ local:
     sites_dir: '~/sites'
 
   deploy:
-    git_deafult_branch: 'qa'
+    git_default_branch: 'qa'
     backup_environment: 'snapshot'
     db_backup_local_cache: '/tmp'
     external_process_timeout: 0.0 # = null = infinite
+    # This variable must be set on the backup environment for each project.
+    internal_site_code_variable: 'SITE_CODE'
 
   stack:
     mysql_user: 'user'
@@ -46,7 +48,10 @@ local:
     elasticsearch_port: 9200
 
   integration:
-    github:
+    github_base_uri: 'git@github.com:britishcouncil'
+    github_repo_prefix: 'solas_'
+    github_default_branch: 'qa'
+    github_local_flag_file: '.github-integration-active'
 
 # Details about the cloud service that the CLI works with.
 service:
@@ -56,7 +61,6 @@ service:
   project_config_dir: '.platform'
   docs_url: 'https://docs.platform.sh'
   accounts_url: 'https://accounts.platform.sh'
-  internal_site_code_variable: 'SITE_CODE'
 
 # Configuration relating to API calls.
 # This can be overridden in the user config file.
