@@ -3,7 +3,6 @@
 namespace Platformsh\Cli\Command\Drupal;
 
 use Cocur\Slugify\Slugify;
-use Platformsh\Cli\Command\CommandBase;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
