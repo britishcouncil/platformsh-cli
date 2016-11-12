@@ -25,14 +25,9 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
 
     // Mount remote file share only if not mounted already.
     if (!$this->isMounted($project)) {
-      $projectRoot = $this->getProjectRoot();
-      // v3.x and newer
-      if (basename($projectRoot) != 'repository') {
-        $sharedPath = $projectRoot . '/.platform/local';
-      }
-      // Legacy 2.x
-      else {
-        $sharedPath = dirname($projectRoot);
+      // Account for Legacy projects CLI < 3.x
+      if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
+        $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
       $command = sprintf('sshfs %s-%s@ssh.bc.platform.sh:/app/public/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect', $project->id, $this::$config->get('local.deploy.backup_environment'), $sharedPath);
       $sshfs = new Process($command);
