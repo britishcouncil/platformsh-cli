@@ -34,14 +34,14 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
-//      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.backup_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
+//      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
 //      $sh = new ShellHelper();
 //      $sh->executeSimple($commandLine);
 //
 //      if (!file_exists($backupPath)) {
         $this->runOtherCommand('environment:sql-dump', [
           '--project' => $project->id,
-          '--environment' => self::$config->get('local.deploy.backup_environment'),
+          '--environment' => self::$config->get('local.deploy.remote_environment'),
           '--file' => $backupPath
         ]);
 //      }

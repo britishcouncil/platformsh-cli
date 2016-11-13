@@ -51,7 +51,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     // Some config.
     $this->profilesRootDir = $this->expandTilde(self::$config->get('local.drupal.profiles_dir'));
     $this->sitesRootDir = $this->expandTilde(self::$config->get('local.drupal.sites_dir'));
-    $this->currentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.backup_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
+    $this->currentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
   }
 
   /**

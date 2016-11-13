@@ -29,7 +29,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
       if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
         $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
-      $command = sprintf('sshfs %s-%s@ssh.bc.platform.sh:/app/public/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect', $project->id, self::$config->get('local.deploy.backup_environment'), $sharedPath);
+      $command = sprintf('sshfs %s-%s@ssh.bc.platform.sh:/app/public/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect', $project->id, self::$config->get('local.deploy.remote_environment'), $sharedPath);
       $sshfs = new Process($command);
       $sshfs->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
       try {
