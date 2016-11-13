@@ -70,8 +70,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $this->setProjectRoot($this->currentProject['root_dir']);
     $this->currentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
-    $this->currentProject['repository'] = $this->currentProject['legacy'] ? $this->currentProject['root_dir'] . '/repository' : $this->currentProject['root_dir'];
-    $this->currentProject['www_dir'] = $this->currentProject['legacy'] ? $this->currentProject['root_dir'] . '/www' : $this->currentProject['root_dir'] . '/_www';
+    $this->currentProject['repository'] = $this->currentProject['legacy'] ?
+      $this->currentProject['root_dir'] . '/repository' :
+      $this->currentProject['root_dir'];
+    $this->currentProject['www_dir'] = $this->currentProject['legacy'] ?
+      $this->currentProject['root_dir'] . '/www' :
+      $this->currentProject['root_dir'] . '/_www';
 
     // Check for profile info.
     $profile = $this->getProfileInfo();
@@ -176,7 +180,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Make sure settings.local.php is up to date for the project.
     $slugify = new Slugify();
-    $slugifiedProjectTitle = str_replace('-', '_', $project->title ? $slugify->slugify($project->title) : $project->id);
+    $slugifiedProjectTitle = str_replace('-', '_', $project->title ?
+      $slugify->slugify($project->title) : $project->id);
     $settings_local_php = sprintf(file_get_contents("/vagrant/etc/cli/resources/drupal/settings.local.php"), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
@@ -297,21 +302,18 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->title</info> ($project->id)...");
 
-    $p = new Process('');
-    $p->setWorkingDirectory($this->currentProject['www_dir']);
+    $sh = new ShellHelper();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
       if ($hook != "cd public") {
-        $p->setCommandLine($hook);
-        $p->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
         try {
-          $this->stdErr->writeln("Running <info>$hook</info>");
-          if (stripos($hook, 'updb')) {
-            $p->mustRun(function ($type, $buffer) {
-              echo $buffer;
-            });
-          }
-          else {
-            $p->mustRun();
+          if (strlen($hook) > 0) {
+            $this->stdErr->writeln("Running <info>$hook</info>");
+            if (stripos($hook, 'updb')) {
+              $sh->executeSimple($hook, $this->currentProject['www_dir']);
+            }
+            else {
+              $sh->execute(explode(' ', $hook), $this->currentProject['www_dir']);
+            }
           }
         }
         catch (ProcessFailedException $e) {
@@ -390,24 +392,17 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       }
     }
 
-    if ($profileName != 'solas2') {
-      // Symlink various resources.
-      $linkMap[$wwwDir . '/profiles/' . $profileName . '/resources/settings'] = $profileDir . '/resources/settings';
-      $linkMap[$wwwDir . '/profiles/' . $profileName . '/resources/sureroute-test-object.html'] = $profileDir . '/resources/sureroute-test-object.html';
-      $linkMap[$wwwDir . '/sureroute-test-object.html'] = $profileDir . '/resources/sureroute-test-object.html';
-      $linkMap[$wwwDir . '/profiles/' . $profileName . '/resources/humans.txt'] = $profileDir . '/resources/humans.txt';
-      $linkMap[$wwwDir . '/humans.txt'] = $profileDir . '/resources/humans.txt';
-    }
-    else {
-      $linkMap += array(
-        $wwwDir . '/profiles/solas2/settings' => $profileDir . '/settings',
-        $wwwDir . '/sites/all/drush/commands/ccall.drush.inc' => $profileDir . '/sites/all/drush/commands/ccall.drush.inc',
-        $wwwDir . '/sureroute-test-object.html' => $profileDir . '/sureroute-test-object.html',
-        $wwwDir . '/humans.txt' => $profileDir . '/humans.txt',
-        $wwwDir . '/profiles/solas2/sureroute-test-object.html' => $profileDir . '/sureroute-test-object.html',
-        $wwwDir . '/profiles/solas2/humans.txt' => $profileDir . '/humans.txt',
-      );
-    }
+    // Legacy solas2-like profiles have no "resources"
+    // directory, so all is found one level up.
+    $resource_dir = file_exists($wwwDir . '/profiles/' . $profileName . '/resources') && is_dir($wwwDir . '/profiles/' . $profileName . '/resources') ?
+      '/resources' : '';
+
+    // Symlink various resources.
+    $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/settings'] = $profileDir . $resource_dir . '/settings';
+    $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/sureroute-test-object.html'] = $profileDir . $resource_dir . '/sureroute-test-object.html';
+    $linkMap[$wwwDir . '/sureroute-test-object.html'] = $profileDir . $resource_dir . '/sureroute-test-object.html';
+    $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/humans.txt'] = $profileDir . $resource_dir . '/humans.txt';
+    $linkMap[$wwwDir . '/humans.txt'] = $profileDir . $resource_dir . '/humans.txt';
 
     return $linkMap;
   }
