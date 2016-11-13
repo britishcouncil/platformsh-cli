@@ -30,7 +30,10 @@ local:
 
   deploy:
     git_default_branch: 'qa'
-    backup_environment: 'snapshot'
+    # WARNING: never use master (live), as this environment is also used to
+    # mount remote files locally; these files may be edited/deleted!
+    # The environment is also used to sync the database from.
+    remote_environment: 'snapshot'
     db_backup_local_cache: '/tmp'
     external_process_timeout: 0.0 # = null = infinite
     # This variable must be set on the backup environment for each project.
