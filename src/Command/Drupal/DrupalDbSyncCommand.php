@@ -19,8 +19,8 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
          ->setDescription('Synchronize local database with designated remote')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
-    $this->addExample('Synchronize database of a Drupal project from daily backup', '-p myproject123')
-         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '-p myproject123 -no-sanitize');
+    $this->addExample('Synchronize database of a Drupal project from daily backup', '/path/to/project')
+         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '--no-sanitize /path/to/project');
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {

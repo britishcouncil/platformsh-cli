@@ -13,7 +13,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class DrupalDeployCommand extends ExtendedCommandBase {
 
@@ -57,10 +56,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // The 'currentProject' array is defined as a protected attribute of the
     // base class ExtendedCommandBase.
-    $this->currentProject['root_dir'] = $this->sitesRootDir . '/' . $this->currentProject['internal_site_code'];
+    $this->extCurrentProject['root_dir'] = $this->sitesRootDir . '/' . $this->extCurrentProject['internal_site_code'];
 
     // If the project was never deployed before.
-    if (!is_dir($this->currentProject['root_dir'] . '/www') && !is_dir($this->currentProject['root_dir'] . '/_www')) {
+    if (!is_dir($this->extCurrentProject['root_dir'] . '/www') && !is_dir($this->extCurrentProject['root_dir'] . '/_www')) {
       $this->fetchSite($project);
       // DB sync is required the first time the project is deployed.
       $input->setOption('db-sync', InputOption::VALUE_NONE);
@@ -68,16 +67,16 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     }
 
     // Set project root.
-    $this->setProjectRoot($this->currentProject['root_dir']);
+    $this->setProjectRoot($this->extCurrentProject['root_dir']);
 
     // Set more info about the current project.
-    $this->currentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
-    $this->currentProject['repository_dir'] = $this->currentProject['legacy'] ?
-      $this->currentProject['root_dir'] . '/repository' :
-      $this->currentProject['root_dir'];
-    $this->currentProject['www_dir'] = $this->currentProject['legacy'] ?
-      $this->currentProject['root_dir'] . '/www' :
-      $this->currentProject['root_dir'] . '/_www';
+    $this->extCurrentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
+    $this->extCurrentProject['repository_dir'] = $this->extCurrentProject['legacy'] ?
+      $this->extCurrentProject['root_dir'] . '/repository' :
+      $this->extCurrentProject['root_dir'];
+    $this->extCurrentProject['www_dir'] = $this->extCurrentProject['legacy'] ?
+      $this->extCurrentProject['root_dir'] . '/www' :
+      $this->extCurrentProject['root_dir'] . '/_www';
 
     // Check for profile info.
     $profile = $this->getProfileInfo();
@@ -104,7 +103,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         // to apply it.
         $this->checkGitHubIntegration();
         // Update the repo.
-        $this->updateRepository($this->currentProject['repository_dir']);
+        $this->updateRepository($this->extCurrentProject['repository_dir']);
       }
     }
 
@@ -112,16 +111,16 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     if ($input->getOption('db-sync')) {
       $this->runOtherCommand('drupal:dbsync', [
         '--no-sanitize' => TRUE,
-        'directory' => $this->currentProject['root_dir'],
+        'directory' => $this->extCurrentProject['root_dir'],
       ]);
     }
 
     // Perform platform build.
     $this->build($project, $profile, $input->getOption('no-archive'), $input->getOption('core-branch'));
 
-    // DB sync and sanitize.
+    // DB sanitize.
     if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
-      $this->runOtherCommand('drupal:db-sanitize', ['directory' => $this->currentProject['root_dir']]);
+      $this->runOtherCommand('drupal:db-sanitize', ['directory' => $this->extCurrentProject['root_dir']]);
     }
 
     // Run deployment hooks, if not requested otherwise.
@@ -130,19 +129,19 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     }
 
     // Mount remote file share.
-    $this->runOtherCommand('drupal:mount', ['directory' => $this->currentProject['root_dir']]);
+    $this->runOtherCommand('drupal:mount', ['directory' => $this->extCurrentProject['root_dir']]);
 
     // Show unclean features, if not requested otherwise.
     if (!$input->getOption('no-unclean-features')) {
       $this->stdErr->writeln("<info>[*]</info> Checking the status of features...");
-      $this->runOtherCommand('drupal:unclean-features', ['directory' => $this->currentProject['root_dir']]);
+      $this->runOtherCommand('drupal:unclean-features', ['directory' => $this->extCurrentProject['root_dir']]);
     }
 
     // Clean up builds.
     $this->cleanBuilds();
 
     // End of deployment.
-    $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->currentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain'). "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
+    $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain'). "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
   }
 
   /**
@@ -156,11 +155,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
   private function build(Project $project, $profile, $noArchive, $coreBranch = NULL) {
     $this->stdErr->writeln('<info>[*]</info> Building <info>' . $project->getProperty('title') . '</info> (' . $project->id . ')...');
 
-    // Account for projects that do not use external distro profiles.
+    // This step is not required for projects that do not
+    // use external distro profiles.
     if (is_array($profile)) {
       // Temporarily override the project.make to use the local checkout of the
       // core profile, which must be on on the branch one desires to deploy.
-      $originalMakefile = file_get_contents($this->currentProject['repository_dir'] . '/project.make');
+      $originalMakefile = file_get_contents($this->extCurrentProject['repository_dir'] . '/project.make');
       if ($coreBranch) {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[branch\] =) (.*)/', "$1 $coreBranch", $originalMakefile);
       }
@@ -169,12 +169,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[url\] =) (.*)/', "$1 " . $this->profilesRootDir . '/' . $profile['name'], $tempMakefile);
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[type\] =) (.*)/', "$1 copy", $tempMakefile);
       }
-      file_put_contents($this->currentProject['repository_dir'] . '/project.make', $tempMakefile);
+      file_put_contents($this->extCurrentProject['repository_dir'] . '/project.make', $tempMakefile);
     }
 
     // Build.
     $localBuildOptions['--yes'] = TRUE;
-    $localBuildOptions['--source'] = $this->currentProject['root_dir'];
+    $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
     }
@@ -182,8 +182,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Make sure settings.local.php is up to date for the project.
     $slugify = new Slugify();
-    $slugifiedProjectTitle = str_replace('-', '_', $project->title ?
-      $slugify->slugify($project->title) : $project->id);
+    $slugifiedProjectTitle = $project->title ? str_replace('-', '_', $slugify->slugify($project->title)) : $project->id;
     $settings_local_php = sprintf(file_get_contents("/vagrant/etc/cli/resources/drupal/settings.local.php"), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
@@ -191,17 +190,18 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     }
     file_put_contents($sharedPath . "/shared/settings.local.php", $settings_local_php);
 
-    // Account for projects that do not use external distro profiles.
+    // This step is not required for projects that do not
+    // use external distro profiles.
     if (is_array($profile)) {
       // Restore original project.make so that the site repo is clean.
-      file_put_contents($this->currentProject['repository_dir'] . '/project.make', $originalMakefile);
+      file_put_contents($this->extCurrentProject['repository_dir'] . '/project.make', $originalMakefile);
 
       // Skip this step if $coreBranch is not NULL.
       if ($coreBranch == NULL) {
         $fs = new Filesystem();
 
         // Remove the .git directory that we got from the "build" of type "copy".
-        $fs->remove($this->currentProject['root_dir'] . '/www/profiles/' . $profile['name'] . '/.git');
+        $fs->remove($this->extCurrentProject['root_dir'] . '/www/profiles/' . $profile['name'] . '/.git');
 
         // Obtain symlinks map for profile.
         $linkMap = $this->mapProfileSymlinks($profile);
@@ -228,18 +228,14 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Checking out <info>" . $profile['name'] . "</info> for the first time...");
 
-    $profileCheckoutDir = $this->profilesRootDir . "/" . $profile['name'];
-
-    $git->cloneRepo($profile['url'], $profileCheckoutDir, array(
+    $git->cloneRepo($profile['url'],  $this->profilesRootDir . "/" . $profile['name'], array(
       '--branch',
-      isset($profile['branch']) ? $profile['branch'] : 'master',
+      isset($profile['branch']) ? $profile['branch'] : self::$config->get('local.deploy.git_default_branch'),
     ));
 
     if (isset($profile['tag'])) {
-      $git->checkOut($profile['tag'], $profileCheckoutDir, TRUE);
+      $git->checkOut($profile['tag'],  $this->profilesRootDir . "/" . $profile['name'], TRUE);
     }
-
-    copy('/vagrant/etc/config/pre-push', $profileCheckoutDir . '/.git/hooks/pre-push');
   }
 
   /**
@@ -256,9 +252,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       '--yes' => TRUE,
       '--environment' => self::$config->get('local.deploy.git_default_branch'),
       'id' => $project->id,
-      'directory' => $this->currentProject['root_dir'],
+      'directory' => $this->extCurrentProject['root_dir'],
     ]);
-    copy('/vagrant/etc/config/pre-push', $this->currentProject['repository_dir'] . '/.git/hooks/pre-push');
   }
 
   /**
@@ -299,7 +294,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $project
    */
   private function runDeployHooks(Project $project) {
-    $localApplication = new LocalApplication($this->currentProject['repository_dir']);
+    $localApplication = new LocalApplication($this->extCurrentProject['repository_dir']);
     $appConfig = $localApplication->getConfig();
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->title</info> ($project->id)...");
@@ -307,19 +302,14 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $sh = new ShellHelper();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
       if ($hook != "cd public") {
-        try {
-          if (strlen($hook) > 0) {
-            $this->stdErr->writeln("Running <info>$hook</info>");
-            if (stripos($hook, 'updb')) {
-              $sh->executeSimple($hook, $this->currentProject['www_dir']);
-            }
-            else {
-              $sh->execute(explode(' ', $hook), $this->currentProject['www_dir']);
-            }
+        if (strlen($hook) > 0) {
+          $this->stdErr->writeln("Running <info>$hook</info>");
+          if (stripos($hook, 'updb')) {
+            $sh->executeSimple($hook, $this->extCurrentProject['www_dir']);
           }
-        }
-        catch (ProcessFailedException $e) {
-          echo $e->getMessage();
+          else {
+            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir']);
+          }
         }
       }
     }
@@ -330,7 +320,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    */
   private function cleanBuilds() {
     $this->stdErr->writeln('<info>[*]</info> Deleting old builds...');
-    chdir($this->currentProject['root_dir']);
+    chdir($this->extCurrentProject['root_dir']);
     $this->runOtherCommand('local:clean', [
       '--keep' => 1,
     ]);
@@ -340,7 +330,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * Get information on the profile used by the project, if one is specified.
    */
   private function getProfileInfo() {
-    $makefile = $this->currentProject['repository_dir'] . '/project.make';
+    $makefile = $this->extCurrentProject['repository_dir'] . '/project.make';
     if (file_exists($makefile)) {
       $ini = new ParserIni();
       $makeData = $ini->parse(file_get_contents($makefile));
@@ -365,7 +355,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
   private function mapProfileSymlinks($profile) {
     $profileName = $profile['name'];
     $profileDir = $this->profilesRootDir . "/" . $profileName;
-    $wwwDir = $this->currentProject['www_dir'];
+    $wwwDir = $this->extCurrentProject['www_dir'];
 
     // The keys of the $linkMap array are the files to remove.
     // The values are the files to symlink to, in place of the removed files.
