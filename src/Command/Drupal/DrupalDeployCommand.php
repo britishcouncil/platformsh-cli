@@ -3,20 +3,17 @@
 namespace Platformsh\Cli\Command\Drupal;
 
 use Cocur\Slugify\Slugify;
-use Composer\Config;
 use Drush\Make\Parser\ParserIni;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\GitHelper;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
-use Platformsh\Cli\Local\LocalBuild;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
-use Symfony\Component\Process\Process;
 
 class DrupalDeployCommand extends ExtendedCommandBase {
 
@@ -58,6 +55,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       mkdir($this->sitesRootDir);
     }
 
+    // The 'currentProject' array is defined as a protected attribute of the
+    // base class ExtendedCommandBase.
     $this->currentProject['root_dir'] = $this->sitesRootDir . '/' . $this->currentProject['internal_site_code'];
 
     // If the project was never deployed before.
@@ -68,9 +67,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $siteJustFetched = TRUE;
     }
 
+    // Set project root.
     $this->setProjectRoot($this->currentProject['root_dir']);
+
+    // Set more info about the current project.
     $this->currentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
-    $this->currentProject['repository'] = $this->currentProject['legacy'] ?
+    $this->currentProject['repository_dir'] = $this->currentProject['legacy'] ?
       $this->currentProject['root_dir'] . '/repository' :
       $this->currentProject['root_dir'];
     $this->currentProject['www_dir'] = $this->currentProject['legacy'] ?
@@ -102,7 +104,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         // to apply it.
         $this->checkGitHubIntegration();
         // Update the repo.
-        $this->updateRepository($this->currentProject['repository']);
+        $this->updateRepository($this->currentProject['repository_dir']);
       }
     }
 
@@ -140,7 +142,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->cleanBuilds();
 
     // End of deployment.
-    $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->currentProject['internal_site_code'] . ".local.solas.britishcouncil.digital</info> to view the site.\n\tThe password for all users is <info>password</info>.");
+    $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->currentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain'). "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
   }
 
   /**
@@ -158,7 +160,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     if (is_array($profile)) {
       // Temporarily override the project.make to use the local checkout of the
       // core profile, which must be on on the branch one desires to deploy.
-      $originalMakefile = file_get_contents($this->currentProject['repository'] . '/project.make');
+      $originalMakefile = file_get_contents($this->currentProject['repository_dir'] . '/project.make');
       if ($coreBranch) {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[branch\] =) (.*)/', "$1 $coreBranch", $originalMakefile);
       }
@@ -167,7 +169,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[url\] =) (.*)/', "$1 " . $this->profilesRootDir . '/' . $profile['name'], $tempMakefile);
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[type\] =) (.*)/', "$1 copy", $tempMakefile);
       }
-      file_put_contents($this->currentProject['repository'] . '/project.make', $tempMakefile);
+      file_put_contents($this->currentProject['repository_dir'] . '/project.make', $tempMakefile);
     }
 
     // Build.
@@ -192,7 +194,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Account for projects that do not use external distro profiles.
     if (is_array($profile)) {
       // Restore original project.make so that the site repo is clean.
-      file_put_contents($this->currentProject['repository'] . '/project.make', $originalMakefile);
+      file_put_contents($this->currentProject['repository_dir'] . '/project.make', $originalMakefile);
 
       // Skip this step if $coreBranch is not NULL.
       if ($coreBranch == NULL) {
@@ -217,7 +219,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
   }
 
   /**
-   * Fetch the Solas profile for the first time.
+   * Fetch the Drupal profile for the first time.
    * @throws \Exception
    */
   private function fetchProfile($profile) {
@@ -256,7 +258,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       'id' => $project->id,
       'directory' => $this->currentProject['root_dir'],
     ]);
-    copy('/vagrant/etc/config/pre-push', $this->currentProject['repository'] . '/.git/hooks/pre-push');
+    copy('/vagrant/etc/config/pre-push', $this->currentProject['repository_dir'] . '/.git/hooks/pre-push');
   }
 
   /**
@@ -297,7 +299,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $project
    */
   private function runDeployHooks(Project $project) {
-    $localApplication = new LocalApplication($this->currentProject['repository']);
+    $localApplication = new LocalApplication($this->currentProject['repository_dir']);
     $appConfig = $localApplication->getConfig();
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->title</info> ($project->id)...");
@@ -338,7 +340,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * Get information on the profile used by the project, if one is specified.
    */
   private function getProfileInfo() {
-    $makefile = $this->currentProject['repository'] . '/project.make';
+    $makefile = $this->currentProject['repository_dir'] . '/project.make';
     if (file_exists($makefile)) {
       $ini = new ParserIni();
       $makeData = $ini->parse(file_get_contents($makefile));

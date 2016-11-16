@@ -116,7 +116,7 @@ abstract class ExtendedCommandBase extends CommandBase {
   protected function gitHubIntegrationAvailable() {
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository']);
+    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
     return $git->execute([
       'ls-remote',
       self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
@@ -143,10 +143,10 @@ abstract class ExtendedCommandBase extends CommandBase {
   public function enableGitHubIntegration() {
     // Write file that indicates an integration is enabled.
     // Save original git URI in it.
-    chdir($this->currentProject['repository']);
+    chdir($this->currentProject['repository_dir']);
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository']);
+    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
     file_put_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'),
       $git->getConfig('remote.platform.url'));
     // Remove "platform" remote.
@@ -180,10 +180,10 @@ abstract class ExtendedCommandBase extends CommandBase {
    * Disable GitHub integration locally for this project.
    */
   public function disableGitHubIntegration($projectRepositoryDir) {
-    chdir($this->currentProject['repository']);
+    chdir($this->currentProject['repository_dir']);
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository']);
+    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
     // Retrieve original git URI.
     $originalGitUri = file_get_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
     // Remove file that indicates an integration is enabled.

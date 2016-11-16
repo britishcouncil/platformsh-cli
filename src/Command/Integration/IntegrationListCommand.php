@@ -70,7 +70,7 @@ class IntegrationListCommand extends IntegrationCommandBase
         switch ($integration->type) {
             case 'github':
             case 'bitbucket':
-                $summary = sprintf('Repository: %s', $details['repository']);
+                $summary = sprintf('Repository: %s', $details['repository_dir']);
                 if ($integration->hasLink('#hook')) {
                     $summary .= "\n" . sprintf('Hook URL: %s', $integration->getLink('#hook'));
                 }
