@@ -10,7 +10,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 abstract class ExtendedCommandBase extends CommandBase {
 
-  protected $currentProject;
+  protected $extCurrentProject;
   protected $profilesRootDir;
   protected $sitesRootDir;
 
@@ -51,7 +51,24 @@ abstract class ExtendedCommandBase extends CommandBase {
     // Some config.
     $this->profilesRootDir = $this->expandTilde(self::$config->get('local.drupal.profiles_dir'));
     $this->sitesRootDir = $this->expandTilde(self::$config->get('local.drupal.sites_dir'));
-    $this->currentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
+    $this->extCurrentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
+
+    if (!($root = $this->getProjectRoot())) {
+      $root = $this->sitesRootDir . '/' . $this->extCurrentProject['internal_site_code'];
+    }
+    if (file_exists($root) && is_dir($root)) {
+      // The 'currentProject' array is defined as a protected attribute of the
+      // base class ExtendedCommandBase.
+      $this->extCurrentProject['root_dir'] = $root;
+      // Set more info about the current project.
+      $this->extCurrentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
+      $this->extCurrentProject['repository_dir'] = $this->extCurrentProject['legacy'] ?
+        $this->extCurrentProject['root_dir'] . '/repository' :
+        $this->extCurrentProject['root_dir'];
+      $this->extCurrentProject['www_dir'] = $this->extCurrentProject['legacy'] ?
+        $this->extCurrentProject['root_dir'] . '/www' :
+        $this->extCurrentProject['root_dir'] . '/_www';
+    }
   }
 
   /**
@@ -116,10 +133,10 @@ abstract class ExtendedCommandBase extends CommandBase {
   protected function gitHubIntegrationAvailable() {
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
+    $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
     return $git->execute([
       'ls-remote',
-      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
+      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->extCurrentProject['internal_site_code'] . '.git',
       'HEAD'
     ]);
   }
@@ -134,7 +151,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     // P.sh integrations API. Unfortunately, that API is only accessible by
     // users with administrative permissions, so they cannot be invoked if
     // the user deploying locally is a normal developer.
-    return file_exists($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
+    return file_exists($this->extCurrentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
   }
 
   /**
@@ -143,11 +160,11 @@ abstract class ExtendedCommandBase extends CommandBase {
   public function enableGitHubIntegration() {
     // Write file that indicates an integration is enabled.
     // Save original git URI in it.
-    chdir($this->currentProject['repository_dir']);
+    chdir($this->extCurrentProject['repository_dir']);
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
-    file_put_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'),
+    $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
+    file_put_contents($this->extCurrentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'),
       $git->getConfig('remote.platform.url'));
     // Remove "platform" remote.
     $git->execute([
@@ -160,7 +177,7 @@ abstract class ExtendedCommandBase extends CommandBase {
       'remote',
       'set-url',
       'origin',
-      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->currentProject['internal_site_code'] . '.git',
+      self::$config->get('local.integration.github_base_uri') . '/' . self::$config->get('local.integration.github_repo_prefix') . $this->extCurrentProject['internal_site_code'] . '.git',
     ]);
     // Fetch the remote.
     $git->execute(['fetch', 'origin']);
@@ -179,15 +196,15 @@ abstract class ExtendedCommandBase extends CommandBase {
   /**
    * Disable GitHub integration locally for this project.
    */
-  public function disableGitHubIntegration($projectRepositoryDir) {
-    chdir($this->currentProject['repository_dir']);
+  public function disableGitHubIntegration() {
+    chdir($this->extCurrentProject['repository_dir']);
     $git = $this->getHelper('git');
     $git->ensureInstalled();
-    $git->setDefaultRepositoryDir($this->currentProject['repository_dir']);
+    $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
     // Retrieve original git URI.
-    $originalGitUri = file_get_contents($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
+    $originalGitUri = file_get_contents($this->extCurrentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
     // Remove file that indicates an integration is enabled.
-    unlink($this->currentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
+    unlink($this->extCurrentProject['root_dir'] . '/' . self::$config->get('local.integration.github_local_flag_file'));
 
     // Restore remote "origin" to original URI.
     $git->execute([
