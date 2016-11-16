@@ -2,7 +2,7 @@
 namespace Platformsh\Cli\Command\Project;
 
 use Cocur\Slugify\Slugify;
-use Platformsh\Cli\Command\CommandBase;
+use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\GitHelper;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalBuild;
@@ -13,7 +13,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class ProjectGetCommand extends CommandBase
+class ProjectGetCommand extends ExtendedCommandBase
 {
 
     protected function configure()
@@ -264,6 +264,9 @@ class ProjectGetCommand extends CommandBase
             );
         }
 
+        $this->validateInput($input);
+        $this->ghExecute();
+
         return $success ? 0 : 1;
     }
 
@@ -286,4 +289,16 @@ class ProjectGetCommand extends CommandBase
                     ->choose($projectList, $text, $input, $this->stdErr);
     }
 
+
+    /**
+     *  Additional GitHub integration steps to run on execute().
+     */
+    private function ghExecute() {
+      // If GitHub integration is available.
+      if ($this->gitHubIntegrationAvailable()) {
+        $this->stdErr->writeln("\n<info>Found GitHub integration</info>: the remote <info>origin</info> will now be pointed at Github...");
+        $this->stdErr->writeln("The remote <info>platform</info> will continue to point at Platform.sh");
+        $this->enableGitHubIntegration();
+      }
+    }
 }

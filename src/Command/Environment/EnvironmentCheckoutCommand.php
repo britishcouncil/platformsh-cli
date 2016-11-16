@@ -1,14 +1,16 @@
 <?php
 namespace Platformsh\Cli\Command\Environment;
 
-use Platformsh\Cli\Command\CommandBase;
+use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Exception\RootNotFoundException;
+use Platformsh\Cli\Helper\GitHelper;
+use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class EnvironmentCheckoutCommand extends CommandBase
+class EnvironmentCheckoutCommand extends ExtendedCommandBase
 {
 
     protected function configure()
@@ -34,6 +36,13 @@ class EnvironmentCheckoutCommand extends CommandBase
         }
 
         $branch = $input->getArgument('id');
+
+        // Handle GitHub integration.
+        $ghRet = $this->ghExecute($input);
+        if ($ghRet !== FALSE) {
+          return $ghRet;
+        }
+
         if (empty($branch)) {
             if ($input->isInteractive()) {
                 $branch = $this->offerBranchChoice($project, $projectRoot);
@@ -146,4 +155,31 @@ class EnvironmentCheckoutCommand extends CommandBase
         return false;
     }
 
+    /**
+     * Additional GitHub integration steps to run on execute().
+     * @param $input
+     */
+    private function ghExecute(InputInterface $input) {
+      // If GitHub integration has become available but it's not yet enabled locally.
+      if ($this->gitHubIntegrationAvailable() && !$this->gitHubIntegrationEnabled()) {
+        $this->enableGitHubIntegration();
+      }
+
+      // If GitHub integration has become unavailable but it's still enabled locally.
+      if ($this->gitHubIntegrationEnabled() && !$this->gitHubIntegrationAvailable()) {
+        $this->disableGitHubIntegration();
+      }
+
+      // If GitHub integration is enabled locally and still available.
+      if ($this->gitHubIntegrationEnabled() && $this->gitHubIntegrationAvailable()) {
+        $git = new GitHelper(new ShellHelper($this->stdErr));
+        $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
+        $git->ensureInstalled();
+        $git->execute(['fetch'], $this->extCurrentProject['repository_dir']);
+        $git->checkOut($input->getArgument('id'), $this->extCurrentProject['repository_dir']);
+        return 0;
+      }
+
+      return FALSE;
+    }
 }

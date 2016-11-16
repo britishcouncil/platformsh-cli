@@ -1,7 +1,7 @@
 <?php
 namespace Platformsh\Cli\Command\Environment;
 
-use Platformsh\Cli\Command\CommandBase;
+use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\GitHelper;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Util\ActivityUtil;
@@ -10,7 +10,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class EnvironmentBranchCommand extends CommandBase
+class EnvironmentBranchCommand extends ExtendedCommandBase
 {
 
     protected function configure()
@@ -42,6 +42,13 @@ class EnvironmentBranchCommand extends CommandBase
         $parentEnvironment = $this->getSelectedEnvironment();
 
         $branchName = $input->getArgument('id');
+
+        // Handle GitHub integration.
+        $ghRet = $this->ghExecute($input);
+        if ($ghRet !== FALSE) {
+          return $ghRet;
+        }
+
         if (empty($branchName)) {
             if ($input->isInteractive()) {
                 // List environments.
@@ -169,5 +176,39 @@ class EnvironmentBranchCommand extends CommandBase
         $this->api()->clearEnvironmentsCache($this->getSelectedProject()->id);
 
         return $remoteSuccess ? 0 : 1;
+    }
+
+    /**
+     * Additional GitHub integration steps to run on execute().
+     * @param $input
+     */
+    private function ghExecute(InputInterface $input) {
+      // If GitHub integration has become available but it's not yet enabled locally.
+      if ($this->gitHubIntegrationAvailable() && !$this->gitHubIntegrationEnabled()) {
+        $this->enableGitHubIntegration();
+      }
+
+      // If GitHub integration has become unavailable but it's still enabled locally.
+      if ($this->gitHubIntegrationEnabled() && !$this->gitHubIntegrationAvailable()) {
+        $this->disableGitHubIntegration();
+      }
+
+      // If GitHub integration is enabled locally and still available.
+      if ($this->gitHubIntegrationEnabled() && $this->gitHubIntegrationAvailable()) {
+        $git = new GitHelper(new ShellHelper($this->stdErr));
+        $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
+        $git->ensureInstalled();
+        $git->execute(['fetch'], $this->extCurrentProject['repository_dir']);
+        $branch = $input->getArgument('id');
+        if (empty($branch)) {
+          $this->stdErr->writeln("<error>You must specify the name of the new branch.</error>");
+          return 1;
+        }
+        $git->checkOutNew($branch, $this->getSelectedEnvironment(), $this->extCurrentProject['repository_dir']);
+        $git->execute(['push', '-u', 'origin', $branch], $this->extCurrentProject['repository_dir']);
+        return 0;
+      }
+
+      return FALSE;
     }
 }
