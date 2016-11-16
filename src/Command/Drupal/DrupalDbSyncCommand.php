@@ -19,8 +19,8 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
          ->setDescription('Synchronize local database with designated remote')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
-    $this->addExample('Synchronize database of a Solas project from daily backup', '-p myproject123')
-         ->addExample('Synchronize database of a Solas project from daily backup; do not sanitize it', '-p myproject123 -no-sanitize');
+    $this->addExample('Synchronize database of a Drupal project from daily backup', '-p myproject123')
+         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '-p myproject123 -no-sanitize');
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {
@@ -34,17 +34,19 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
-//      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
-//      $sh = new ShellHelper();
-//      $sh->executeSimple($commandLine);
-//
-//      if (!file_exists($backupPath)) {
-        $this->runOtherCommand('environment:sql-dump', [
+      // SCP and GUNZIP compressed database backup.
+      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
+      $sh = new ShellHelper();
+      $sh->execute(explode(' ', $commandLine));
+
+      // If the the above didn't work, use sql-dump command.
+      if (!file_exists($backupPath)) {
+        $this->runOtherCommand('db:dump', [
           '--project' => $project->id,
           '--environment' => self::$config->get('local.deploy.remote_environment'),
           '--file' => $backupPath
         ]);
-//      }
+      }
     }
     else {
       $this->stdErr->writeln("Retrieving backup from the cache: <info>$backupPath</info>");
