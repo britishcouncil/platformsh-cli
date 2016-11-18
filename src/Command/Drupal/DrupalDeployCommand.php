@@ -4,6 +4,8 @@ namespace Platformsh\Cli\Command\Drupal;
 
 use Cocur\Slugify\Slugify;
 use Drush\Make\Parser\ParserIni;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\GitHelper;
 use Platformsh\Cli\Helper\ShellHelper;
@@ -117,6 +119,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Perform platform build.
     $this->build($project, $profile, $input->getOption('no-archive'), $input->getOption('core-branch'));
+
+    // If the profiles uses Elastic Search.
+    if (file_exists($this->extCurrentProject['www_dir'] . '/profiles/' . $profile['name'] . '/modules/contrib/search_api_elasticsearch')) {
+      // Create Elastic Search indices.
+      $_reindex = $this->createElasticSearchIndices($project);
+    }
 
     // DB sanitize.
     if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
@@ -335,7 +343,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $ini = new ParserIni();
       $makeData = $ini->parse(file_get_contents($makefile));
       foreach ($makeData['projects'] as $projectName => $projectInfo) {
-        if (($projectInfo['type'] == 'profile') && ($projectInfo['download']['type'] == 'git')) {
+        if (($projectInfo['type'] == 'profile') && ($projectInfo['download']['type'] == 'git' || ($projectInfo['download']['type'] == 'copy'))) {
           $p = $projectInfo['download'];
           $p['name'] = $projectName;
           unset($p['type']);
@@ -398,4 +406,50 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     return $linkMap;
   }
+
+  /**
+   * Creates ES indices for a project, if not present.
+   * @param $project
+   * @return bool Whether or not to reindex.
+   */
+  private function createElasticSearchIndices(Project $project) {
+    $slugify = new Slugify();
+    $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
+    $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
+    $elasticSearchBaseUrl = 'http://' . self::$config->get('local.stack.elasticsearch_host') . ":" . self::$config->get('local.stack.elasticsearch_port') . '/';
+
+    // Use PHP MySQL APIs for these simple queries.
+    $query = "SELECT sai.machine_name FROM search_api_index sai INNER JOIN search_api_server sas ON sai.server = sas.machine_name WHERE sas.class = 'search_api_elasticsearch_elastica_service'";
+    if ($connection = mysqli_connect(self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_root_user'), self::$config->get('local.stack.mysql_root_password'))) {
+      mysqli_select_db($connection, $dbName);
+      $r = mysqli_query($connection, $query);
+    }
+    else {
+      $this->stdErr->writeln('<error>Could not connect to MySQL. Try again later.</error>');
+      return 1;
+    }
+
+    // Guzzle Http Client.
+    $c = new Client();
+    $_reindex = FALSE;
+    while ($row = mysqli_fetch_assoc($r)) {
+      $index = "elasticsearch_index_" . $dbName . "_" . $row['machine_name'];
+      try {
+        $c->head($elasticSearchBaseUrl . $index);
+      }
+      catch (RequestException $e) {
+        if ($e->getCode() == 404) {
+          // Create it.
+          $this->stdErr->writeln("<info>[*]</info> Creating empty Elastic Search index <info>$index</info>...");
+          $c->put($elasticSearchBaseUrl . $index);
+          $_reindex = TRUE;
+        }
+      }
+    }
+
+    mysqli_close($connection);
+
+    return $_reindex;
+  }
+
 }
