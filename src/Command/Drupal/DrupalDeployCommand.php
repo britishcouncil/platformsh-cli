@@ -191,7 +191,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Make sure settings.local.php is up to date for the project.
     $slugify = new Slugify();
     $slugifiedProjectTitle = $project->title ? str_replace('-', '_', $slugify->slugify($project->title)) : $project->id;
-    $settings_local_php = sprintf(file_get_contents("/vagrant/etc/cli/resources/drupal/settings.local.php"), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
+    $settings_local_php = sprintf($this->localSettingsFile(), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
       $sharedPath = $this->getProjectRoot() . '/.platform/local';
@@ -452,4 +452,46 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     return $_reindex;
   }
 
+  /**
+   *  Helper function. A template for settings.local.php.
+   */
+  private function localSettingsFile() {
+    $settings = <<<'SET'
+<?php
+/**
+ * This is meant to override the default settings.local.php
+ * that plastformsh-cli uses locally.
+ */
+
+$relationships = array();
+
+// Redis config.
+$relationships['redis'][0]['host'] = '127.0.0.1';
+$relationships['redis'][0]['port'] = '6379';
+
+// Elastic search config.
+$relationships['elasticsearch'][0]['host'] = '127.0.0.1';
+$relationships['elasticsearch'][0]['port'] = '9200';
+
+$databases['default']['default'] = array(
+  'database' => '%s',
+  'username' => '%s',
+  'password' => '%s',
+  'host' => '%s',
+  'driver' => 'mysql',
+  'port' => '%d',
+  'prefix' => '',
+);
+
+// Default PHP settings.
+ini_set('session.gc_probability', 1);
+ini_set('session.gc_divisor', 100);
+ini_set('session.gc_maxlifetime', 200000);
+ini_set('session.cookie_lifetime', 2000000);
+ini_set('pcre.backtrack_limit', 200000);
+ini_set('pcre.recursion_limit', 200000);
+SET;
+
+    return $settings;
+  }
 }
