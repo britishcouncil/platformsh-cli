@@ -35,9 +35,11 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
       // SCP and GUNZIP compressed database backup.
-      $commandLine = "scp " . $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz $backupPath.gz && gunzip $backupPath.gz";
       $sh = new ShellHelper();
-      $sh->execute(explode(' ', $commandLine));
+      $sh->execute(['scp',
+        $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
+        "$backupPath.gz"], null, true);
+      $sh->execute(['gunzip', "$backupPath.gz"], null, true);
 
       // If the the above didn't work, use sql-dump command.
       if (!file_exists($backupPath)) {
