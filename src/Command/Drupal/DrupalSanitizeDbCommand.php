@@ -21,21 +21,19 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $project = $this->getSelectedProject();
-    $internal_site_code = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
+    $wwwRoot = ($this->localProject->getLegacyProjectRoot() !== false) ? $this->localProject->getLegacyProjectRoot() . '/../www' : $this->getProjectRoot() . '/_www';
 
     /* @var DrushHelper $dh */
     $dh = $this->getHelper('drush');
 
     $dh->ensureInstalled();
     try {
-      $this->stdErr->write("<info>[*]</info> Sanitizing database for <info>" . $project->getProperty('title') . "</info> (" . $project->id . ")...");
+      $this->stdErr->writeln("Sanitizing database for <info>" . $project->id . "</info> (" . $project->getProperty('title') . ")");
       $dh->execute([
         '-y',
-        "@$internal_site_code._local",
         'sql-sanitize',
         '--sanitize-email="%name@example.com"'
-      ], NULL, TRUE);
-      $this->stdErr->writeln("\t<info>[ok]</info>");
+      ], $wwwRoot, TRUE);
     }
     catch (\Exception $e) {
       echo $e->getMessage();
