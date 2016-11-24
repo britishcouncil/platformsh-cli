@@ -112,6 +112,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // DB import.
     if ($input->getOption('db-sync')) {
       $this->runOtherCommand('drupal:dbsync', [
+        '--environment' => self::$config->get('local.deploy.remote_environment'),
         '--no-sanitize' => TRUE,
         'directory' => $this->extCurrentProject['root_dir'],
       ]);
