@@ -19,25 +19,28 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
          ->setDescription('Synchronize local database with designated remote')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
-    $this->addExample('Synchronize database of a Drupal project from daily backup', '/path/to/project')
-         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '--no-sanitize /path/to/project');
+    $this->addEnvironmentOption();
+    $this->addExample('Synchronize database of a Drupal project from daily backup', '-e environmentID /path/to/project')
+         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '--no-sanitize -e environmentID /path/to/project');
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $project = $this->getSelectedProject();
+    $envId = $this->getSelectedEnvironment()->id;
     $slugify = new Slugify();
     $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
     $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
 
-    $this->stdErr->writeln("<info>[*]</info> Importing live database backup for <info>" . $project->getProperty('title') . "</info> (" . $project->id . ")...");
+    $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . "</info> (" . $project->getProperty('title') . ")");
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
+      $this->stdErr->writeln("Downloading backup to: <info>$backupPath</info>");
       // SCP and GUNZIP compressed database backup.
       $sh = new ShellHelper();
       $sh->execute(['scp',
-        $project->id . "-" . self::$config->get('local.deploy.remote_environment') . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
+        $project->id . "-" . $envId . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
         "$backupPath.gz"], null, true);
       $sh->execute(['gunzip', "$backupPath.gz"], null, true);
 
@@ -45,7 +48,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       if (!file_exists($backupPath)) {
         $this->runOtherCommand('db:dump', [
           '--project' => $project->id,
-          '--environment' => self::$config->get('local.deploy.remote_environment'),
+          '--environment' => $envId,
           '--file' => $backupPath
         ]);
       }
@@ -54,10 +57,9 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       $this->stdErr->writeln("Retrieving backup from the cache: <info>$backupPath</info>");
     }
 
-    $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
-
     // If dump is present and sound.
     if (file_exists($backupPath) && filesize($backupPath) > 0) {
+      $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
       // Use PHP MySQL APIs for these simple queries.
       $queries = array(
         "DROP DATABASE IF EXISTS $dbName",
