@@ -138,7 +138,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     }
 
     // Mount remote file share.
-    $this->runOtherCommand('drupal:mount', ['directory' => $this->extCurrentProject['root_dir']]);
+    $this->runOtherCommand('drupal:mount-files', [
+      '--environment' => self::$config->get('local.deploy.remote_environment'),
+      'directory' => $this->extCurrentProject['root_dir'],
+    ]);
 
     // Show unclean features, if not requested otherwise.
     if (!$input->getOption('no-unclean-features')) {
