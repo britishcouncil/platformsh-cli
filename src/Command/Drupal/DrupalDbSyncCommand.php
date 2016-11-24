@@ -14,8 +14,8 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 class DrupalDbSyncCommand extends ExtendedCommandBase {
 
   protected function configure() {
-    $this->setName('drupal:dbsync')
-         ->setAliases(array('dbsync'))
+    $this->setName('drupal:db-sync')
+         ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
