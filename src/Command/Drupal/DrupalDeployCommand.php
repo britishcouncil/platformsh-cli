@@ -111,7 +111,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // DB import.
     if ($input->getOption('db-sync')) {
-      $this->runOtherCommand('drupal:dbsync', [
+      $this->runOtherCommand('drupal:db-sync', [
         '--environment' => self::$config->get('local.deploy.remote_environment'),
         '--no-sanitize' => TRUE,
         'directory' => $this->extCurrentProject['root_dir'],
@@ -151,6 +151,11 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // End of deployment.
     $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain'). "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
+
+    if ($input->getOption('core-branch')) {
+      $this->stdErr->writeln("\n<info>NOTE:</info> The distro profile has not been symlinked because you have deployed using <info>[-c | --core-branch]</info>.");
+    }
+
   }
 
   /**
