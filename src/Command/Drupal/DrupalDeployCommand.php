@@ -95,7 +95,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $this->stdErr->writeln('<info>[*]</info> Ignoring local profile repository. Using remote with branch <info>' . $input->getOption('core-branch') . '</info>');
       }
       // If we are not to fetch from a remote core branch.
-      elseif (is_array($profile) && !$profileJustFetched) {
+      else {
+        if (is_array($profile) && !$profileJustFetched) {
           $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
         }
       }
