@@ -91,12 +91,13 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Update repositories, if not requested otherwise.
     if (!$input->getOption('no-git-pull')) {
-      // If we are not to fetch from a remote core branch.
-      if (is_array($profile) && !$profileJustFetched && !$input->hasOption('core-branch')) {
-        $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
-      }
-      else {
+      if ($input->hasOption('core-branch')) {
         $this->stdErr->writeln('<info>[*]</info> Ignoring local profile repository. Using remote with branch <info>' . $input->getOption('core-branch') . '</info>');
+      }
+      // If we are not to fetch from a remote core branch.
+      elseif (is_array($profile) && !$profileJustFetched) {
+          $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
+        }
       }
       // Update site repo only if the site has not just been fetched
       // for the first time.
