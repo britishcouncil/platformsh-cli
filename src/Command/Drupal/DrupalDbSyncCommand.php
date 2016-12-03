@@ -27,7 +27,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $project = $this->getSelectedProject();
-    $envId = $input->getArgument('environment');
+    $envId = $input->getOption('environment');
     $slugify = new Slugify();
     $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
     $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
