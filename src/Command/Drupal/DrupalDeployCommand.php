@@ -91,7 +91,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Update repositories, if not requested otherwise.
     if (!$input->getOption('no-git-pull')) {
-      if ($input->hasOption('core-branch')) {
+      if ($input->getOption('core-branch')) {
         $this->stdErr->writeln('<info>[*]</info> Ignoring local profile repository. Using remote with branch <info>' . $input->getOption('core-branch') . '</info>');
       }
       // If we are not to fetch from a remote core branch.
