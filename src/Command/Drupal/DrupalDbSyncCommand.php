@@ -38,19 +38,14 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     if (!file_exists($backupPath)) {
       $this->stdErr->writeln("Downloading backup to: <info>$backupPath</info>");
 
-      try {
-        // SCP and GUNZIP compressed database backup.
-        $sh = new ShellHelper();
-        $sh->execute([
-          'scp',
-          $project->id . "-" . $envId . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
-          "$backupPath.gz"
-        ], NULL, TRUE);
-        $sh->execute(['gunzip', "$backupPath.gz"], NULL, TRUE);
-      }
-      catch (Exception $e) {
-        ;
-      }
+      // SCP and GUNZIP compressed database backup.
+      $sh = new ShellHelper();
+      $sh->execute([
+        'scp',
+        $project->id . "-" . $envId . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
+        "$backupPath.gz"
+      ]);
+      $sh->execute(['gunzip', "$backupPath.gz"]);
 
       // If the the above didn't work, use sql-dump command.
       if (!file_exists($backupPath)) {
