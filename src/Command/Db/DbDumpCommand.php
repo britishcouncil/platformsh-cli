@@ -2,7 +2,6 @@
 namespace Platformsh\Cli\Command\Db;
 
 use Platformsh\Cli\Command\CommandBase;
-use Platformsh\Cli\Exception\RootNotFoundException;
 use Platformsh\Cli\Util\RelationshipsUtil;
 use Platformsh\Client\Model\Environment;
 use Platformsh\Client\Model\Project;
@@ -17,8 +16,9 @@ class DbDumpCommand extends CommandBase
     {
         $this->setName('db:dump')
             ->setAliases(['sql-dump'])
-            ->setDescription('Create a local dump of the remote database')
-            ->addOption('file', 'f', InputOption::VALUE_REQUIRED, 'A filename where the dump should be saved. Defaults to "<project ID>--<environment ID>--dump.sql" in the project root')
+            ->setDescription('Create a local dump of the remote database');
+        RelationshipsUtil::configureInput($this->getDefinition());
+        $this->addOption('file', 'f', InputOption::VALUE_REQUIRED, 'A filename where the dump should be saved. Defaults to "<project ID>--<environment ID>--dump.sql" in the project root')
             ->addOption('timestamp', 't', InputOption::VALUE_NONE, 'Add a timestamp to the dump filename')
             ->addOption('stdout', null, InputOption::VALUE_NONE, 'Output to STDOUT instead of a file');
         $this->addProjectOption()->addEnvironmentOption()->addAppOption();
@@ -46,8 +46,7 @@ class DbDumpCommand extends CommandBase
                     $prefix = substr($dumpFile, 0, - strlen($basename));
                     if ($dotPos = strrpos($basename, '.')) {
                         $basename = substr($basename, 0, $dotPos) . '--' . $timestamp . substr($basename, $dotPos);
-                    }
-                    else {
+                    } else {
                         $basename .= '--' . $timestamp;
                     }
                     $dumpFile = $prefix . $basename;
@@ -60,14 +59,11 @@ class DbDumpCommand extends CommandBase
                 if (is_dir($dumpFile)) {
                     $dumpFile .= '/' . $this->getDefaultDumpFilename($project, $environment, $appName, $timestamp);
                 }
-            }
-            else {
-                if (!$projectRoot = $this->getProjectRoot()) {
-                    throw new RootNotFoundException(
-                        'Project root not found. Specify --file or go to a project directory.'
-                    );
-                }
-                $dumpFile = $projectRoot . '/' . $this->getDefaultDumpFilename($project, $environment, $appName, $timestamp);
+            } else {
+                $projectRoot = $this->getProjectRoot();
+                $directory = $projectRoot ?: getcwd();
+                $dumpFile = $directory
+                    . '/' . $this->getDefaultDumpFilename($project, $environment, $appName, $timestamp);
             }
         }
 
