@@ -5,6 +5,8 @@ namespace Platformsh\Cli\Command\Drupal;
 use Cocur\Slugify\Slugify;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\ShellHelper;
+use Platformsh\Cli\Local\LocalApplication;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -36,7 +38,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     }
   }
 
-  protected function _execute(InputInterface $input, $app) {
+  protected function _execute(InputInterface $input, LocalApplication $app) {
     $project = $this->getSelectedProject();
     $envId = $input->getOption('environment');
     $slugify = new Slugify();
