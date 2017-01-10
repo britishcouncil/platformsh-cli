@@ -17,6 +17,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $this->setName('drupal:db-sync')
          ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
+         ->addOption('app', NULL, InputArgument::IS_ARRAY, 'Specify application(s) to import the database for.')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
     $this->addEnvironmentOption();
@@ -26,10 +27,21 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
+    $apps = $input->getOption('app');
+    foreach (LocalApplication::getApplications($input->getArgument('directory'), $this->config) as $app) {
+      if ($apps && !in_array($app->getId(), $apps)) {
+        continue;
+      }
+      $this->_execute($input, $app);
+    }
+  }
+
+  protected function _execute(InputInterface $input, $app) {
     $project = $this->getSelectedProject();
     $envId = $input->getOption('environment');
     $slugify = new Slugify();
-    $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
+    $slugifiedTitle = ($project->title ? $slugify->slugify($project->title) :
+      $project->id) . ($slugify->slugify($app->getId()));
     $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
 
     $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . "</info> (" . $project->getProperty('title') . ")");
@@ -42,7 +54,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       $sh = new ShellHelper();
       $sh->execute([
         'scp',
-        $project->id . "-" . $envId . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
+        $project->id . "-" . $envId . "--" . $app->getId() . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
         "$backupPath.gz"
       ]);
       $sh->execute(['gunzip', "$backupPath.gz"]);
@@ -52,6 +64,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
         $this->runOtherCommand('db:dump', [
           '--project' => $project->id,
           '--environment' => $envId,
+          '--app' => $app->getId(),
           '--file' => $backupPath
         ]);
       }
@@ -105,3 +118,4 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     }
   }
 }
+
