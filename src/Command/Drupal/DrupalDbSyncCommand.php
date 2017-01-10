@@ -43,7 +43,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $envId = $input->getOption('environment');
     $slugify = new Slugify();
     $slugifiedTitle = ($project->title ? $slugify->slugify($project->title) :
-      $project->id) . ($slugify->slugify($app->getId()));
+      $project->id) . '-' . ($slugify->slugify($app->getId()));
     $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
 
     $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . "</info> (" . $project->getProperty('title') . ")");
