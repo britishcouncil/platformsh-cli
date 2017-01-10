@@ -30,7 +30,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($input->getArgument('directory'), $this->config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
