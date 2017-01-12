@@ -15,7 +15,7 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
     $this->setName('drupal:db-sanitize')
          ->setAliases(array('db-sanitize'))
          ->setDescription('Sanitize the database')
-         ->addOption('app', NULL, InputOption::IS_ARRAY, 'Specify application(s) to sanitize the database for.');
+         ->addOption('app', NULL, InputOption::VALUE_IS_ARRAY, 'Specify application(s) to sanitize the database for.');
     $this->addDirectoryArgument();
     $this->addExample("Sanitize database of a Drupal project", "/path/to/project");
   }
