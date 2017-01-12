@@ -6,7 +6,6 @@ use Cocur\Slugify\Slugify;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -19,7 +18,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $this->setName('drupal:db-sync')
          ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
-         ->addOption('app', NULL, InputArgument::IS_ARRAY, 'Specify application(s) to import the database for.')
+         ->addOption('app', NULL, InputOption::IS_ARRAY, 'Specify application(s) to import the database for.')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
     $this->addEnvironmentOption();
@@ -46,7 +45,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       $project->id) . '-' . ($slugify->slugify($app->getId()));
     $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
 
-    $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . "</info> (" . $project->getProperty('title') . ")");
+    $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . '-' . $app->getId() . "</info>");
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
