@@ -108,7 +108,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
       // Sanitise, if requested.
       if (!$input->getOption('no-sanitize')) {
-        $this->runOtherCommand('drupal:db-sanitize', ["directory" => $this->getProjectRoot()]);
+        $this->runOtherCommand('drupal:db-sanitize', ["directory" => $this->getProjectRoot(), "--app" => $app->getId()]);
         return 1;
       }
       return 0;
