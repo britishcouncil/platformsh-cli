@@ -18,7 +18,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $this->setName('drupal:db-sync')
          ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
-         ->addOption('app', NULL, InputOption::VALUE_IS_ARRAY, 'Specify application(s) to import the database for.')
+         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to import the database for.')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
     $this->addDirectoryArgument();
     $this->addEnvironmentOption();

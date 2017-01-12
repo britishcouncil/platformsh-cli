@@ -22,7 +22,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->setName('drupal:deploy')
          ->setAliases(array('deploy'))
          ->setDescription('Deploy a Drupal Site locally')
-         ->addOption('app', NULL, InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build')
+         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build')
          ->addOption('db-sync', 'd', InputOption::VALUE_NONE, "Sync project's database with the daily live backup.")
          ->addOption('core-branch', 'c', InputOption::VALUE_REQUIRED, "The core profile's branch to use during deployment")
          ->addOption('no-archive', 'A', InputOption::VALUE_NONE, 'Do not create or use a build archive. Run \'platform help build\' for more info.')
