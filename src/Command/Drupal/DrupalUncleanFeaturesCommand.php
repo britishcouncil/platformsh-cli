@@ -5,6 +5,7 @@ namespace Platformsh\Cli\Command\Drupal;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Local\LocalApplication;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
