@@ -355,18 +355,18 @@ class DrupalDeployCommand extends ExtendedCommandBase {
   private function runDeployHooks(Project $project, LocalApplication $app) {
     $appConfig = $app->getConfig();
 
-    $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id . '-' . $app->getId()</info>...");
+    $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
 
     $sh = new ShellHelper();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
-      if ($hook != "cd public") {
+      if ($hook != "cd " . $app->getDocumentRoot()) {
         if (strlen($hook) > 0) {
           $this->stdErr->writeln("Running <info>$hook</info>");
           if (stripos($hook, 'updb')) {
-            $sh->executeSimple($hook, $this->extCurrentProject['www_dir']);
+            $sh->executeSimple($hook, $this->extCurrentProject['www_dir'] . $app->wwwSubdir);
           }
           else {
-            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir']);
+            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir'] . $app->wwwSubdir);
           }
         }
       }
