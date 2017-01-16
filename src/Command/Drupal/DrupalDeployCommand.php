@@ -120,7 +120,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         }
         // If we are not to fetch from a remote core branch.
         else {
-          if (is_array($profile) && !$profileJustFetched[$profile['name']]) {
+          if (is_array($profile) && !empty($profileJustFetched[$profile['name']])) {
             $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
             // We only need to do this once for the project, not for every app;
             // in case more than one app uses the same profile.
@@ -146,7 +146,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $this->runOtherCommand('drupal:db-sync', [
           '--environment' => self::$config->get('local.deploy.remote_environment'),
           '--no-sanitize' => TRUE,
-          '--app' => $app->getId(),
+          '--app' => [$app->getId()],
           'directory' => $this->extCurrentProject['root_dir'],
         ]);
       }
@@ -163,8 +163,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       // DB sanitize.
       if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
         $this->runOtherCommand('drupal:db-sanitize', [
+          '--app' => [$app->getId()],
           'directory' => $this->extCurrentProject['root_dir'],
-          '--app' => $app->getId(),
         ]);
       }
 
@@ -176,13 +176,17 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       // Mount remote file share.
       $this->runOtherCommand('drupal:mount-files', [
         '--environment' => self::$config->get('local.deploy.remote_environment'),
+        '--app' => [$app->getId()],
         'directory' => $this->extCurrentProject['root_dir'],
       ]);
 
       // Show unclean features, if not requested otherwise.
       if (!$input->getOption('no-unclean-features')) {
         $this->stdErr->writeln("<info>[*]</info> Checking the status of features...");
-        $this->runOtherCommand('drupal:unclean-features', ['directory' => $this->extCurrentProject['root_dir']]);
+        $this->runOtherCommand('drupal:unclean-features', [
+          '--app' => [$app->getId()],
+          'directory' => $this->extCurrentProject['root_dir']
+        ]);
       }
 
       // Clean up builds.
@@ -229,7 +233,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Build.
     $localBuildOptions['--yes'] = TRUE;
     $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
-    $localBuildOptions['app'] = $app->getId();
+    $localBuildOptions['app'] = [$app->getId()];
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
     }
@@ -384,7 +388,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * Get information on the profile used by the project, if one is specified.
    */
   private function getProfileInfo(LocalApplication $app) {
-
     $makefile = $this->extCurrentProject['repository_dir'] . $app->repoSubdir . '/project.make';
 
     if (file_exists($makefile)) {
