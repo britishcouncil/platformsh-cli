@@ -59,7 +59,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     if (($app->repoSubdir = $app->getDocumentRoot()) != 'public') {
       $app->wwwSubdir = '/' . $app->getId();
       $app->repoSubdir = '/' . $app->repoSubdir;
-      $app->remoteDocRoot = $app->wwwSubdir;
+      $app->remoteDocRoot = $app->repoSubdir;
     }
     else {
       $app->repoSubdir = $app->wwwSubdir = '';
