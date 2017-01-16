@@ -2,6 +2,7 @@
 
 namespace Platformsh\Cli\Command;
 
+use Platformsh\Cli\Local\LocalApplication;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -51,7 +52,8 @@ abstract class ExtendedCommandBase extends CommandBase {
     // Some config.
     $this->profilesRootDir = $this->expandTilde(self::$config->get('local.drupal.profiles_dir'));
     $this->sitesRootDir = $this->expandTilde(self::$config->get('local.drupal.sites_dir'));
-    $this->extCurrentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
+    $this->extCurrentProject['internal_site_code'] = $this->selectEnvironment(self::$config->get('local.deploy.remote_environment'))
+                                                          ->getVariable(self::$config->get('local.deploy.internal_site_code_variable'))->value;
 
     if (!($root = $this->getProjectRoot())) {
       $root = $this->sitesRootDir . '/' . $this->extCurrentProject['internal_site_code'];
@@ -233,6 +235,17 @@ abstract class ExtendedCommandBase extends CommandBase {
     $git->execute(['pull']);
   }
 
+  /**
+   * Build a MySQL-safe slug for project-app.
+   */
+  protected function getSlug(Project $project, LocalApplication $app) {
+    // Make sure settings.local.php is up to date for the project.
+    $slugify = new Slugify();
+    return str_replace('-', '_', ($project->title ?
+        $slugify->slugify($project->title) :
+        $project->id) . '-' . ($slugify->slugify($app->getId())));
+  }
+
   private function expandTilde($path) {
     if (function_exists('posix_getuid') && strpos($path, '~') !== FALSE) {
       $info = posix_getpwuid(posix_getuid());
@@ -240,4 +253,5 @@ abstract class ExtendedCommandBase extends CommandBase {
     }
     return $path;
   }
+
 }

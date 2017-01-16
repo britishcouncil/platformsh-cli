@@ -2,7 +2,6 @@
 
 namespace Platformsh\Cli\Command\Drupal;
 
-use Cocur\Slugify\Slugify;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
@@ -33,17 +32,17 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
-      $this->_execute($input, $app);
+      if ($app->getConfig()['build']['flavor'] == 'drupal') {
+        $this->_execute($input, $app);
+      }
     }
   }
 
   protected function _execute(InputInterface $input, LocalApplication $app) {
     $project = $this->getSelectedProject();
     $envId = $input->getOption('environment');
-    $slugify = new Slugify();
-    $slugifiedTitle = ($project->title ? $slugify->slugify($project->title) :
-      $project->id) . '-' . ($slugify->slugify($app->getId()));
-    $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '-' . $slugifiedTitle . '.sql';
+    $slugifiedTitle = $this->getSlug($project, $app);
+    $backupPath = self::$config->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '_' . $slugifiedTitle . '.sql';
 
     $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . '-' . $app->getId() . "</info>");
 
@@ -76,7 +75,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
     // If dump is present and sound.
     if (file_exists($backupPath) && filesize($backupPath) > 0) {
-      $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
+      $dbName = self::$config->get('local.stack.mysql_db_prefix') . $slugifiedTitle;
       // Use PHP MySQL APIs for these simple queries.
       $queries = array(
         "DROP DATABASE IF EXISTS $dbName",
@@ -108,8 +107,10 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
 
       // Sanitise, if requested.
       if (!$input->getOption('no-sanitize')) {
-        $this->runOtherCommand('drupal:db-sanitize', ["directory" => $this->getProjectRoot(), "--app" => $app->getId()]);
-        return 1;
+        $this->runOtherCommand('drupal:db-sanitize', [
+          "directory" => $this->getProjectRoot(),
+          "--app" => $app->getId()
+        ]);
       }
       return 0;
     }

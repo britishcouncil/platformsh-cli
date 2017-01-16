@@ -2,7 +2,6 @@
 
 namespace Platformsh\Cli\Command\Drupal;
 
-use Cocur\Slugify\Slugify;
 use Drush\Make\Parser\ParserIni;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
@@ -43,7 +42,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $project = $this->getSelectedProject();
 
     $siteJustFetched = FALSE;
-    $profileJustFetched = FALSE;
+    $profileJustFetched = [];
 
     $this->stdErr->writeln("<info>[*]</info> Deployment started for <info>" . $project->getProperty('title') . "</info> ($project->id)");
 
@@ -81,87 +80,121 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $this->extCurrentProject['root_dir'] . '/www' :
       $this->extCurrentProject['root_dir'] . '/_www';
 
-    // Check for profile info.
-    $profile = $this->getProfileInfo();
+    $apps = $input->getOption('app');
 
-    // If the project refers to a profile and this was never fetched before.
-    if (is_array($profile) && (!is_dir($this->profilesRootDir . "/" . $profile['name']))) {
-      $this->fetchProfile($profile);
-      $profileJustFetched = TRUE;
-    }
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
 
-    // Update repositories, if not requested otherwise.
-    if (!$input->getOption('no-git-pull')) {
-      if ($input->getOption('core-branch')) {
-        $this->stdErr->writeln('<info>[*]</info> Ignoring local profile repository. Using remote with branch <info>' . $input->getOption('core-branch') . '</info>');
+      if ($apps && !in_array($app->getId(), $apps)) {
+        continue;
       }
-      // If we are not to fetch from a remote core branch.
+
+      // Only work with Drupal apps.
+      if ($app->getConfig()['build']['flavor'] != 'drupal') {
+        continue;
+      }
+
+      // When the project is single-app with all files at the root of the repo,
+      // the 'www' dir is a link to the webroot. In all other cases, the 'www' dir
+      // will contain symlinks to all the webroots, named after the app's id.
+      if (($app->repoSubdir = $app->getDocumentRoot()) != 'public') {
+        $app->wwwSubdir = '/' . $app->getId();
+        $app->repoSubdir = '/' . $app->repoSubdir;
+      }
       else {
-        if (is_array($profile) && !$profileJustFetched) {
-          $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
+        $app->repoSubdir = $app->wwwSubdir = '';
+      }
+
+      // Check for profile info.
+      $profile = $this->getProfileInfo($app);
+
+      // If the project refers to a profile and this was never fetched before.
+      if (is_array($profile) && (!is_dir($this->profilesRootDir . "/" . $profile['name']))) {
+        $this->fetchProfile($profile);
+        $profileJustFetched[$profile['name']] = TRUE;
+      }
+
+      // Update repositories, if not requested otherwise.
+      if (!$input->getOption('no-git-pull')) {
+        if ($input->getOption('core-branch')) {
+          $this->stdErr->writeln('<info>[*]</info> Ignoring local profile repository. Using remote with branch <info>' . $input->getOption('core-branch') . '</info>');
+        }
+        // If we are not to fetch from a remote core branch.
+        else {
+          if (is_array($profile) && !$profileJustFetched[$profile['name']]) {
+            $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
+            // We only need to do this once for the project, not for every app;
+            // in case more than one app uses the same profile.
+            $profileJustFetched[$profile['name']] = TRUE;
+          }
+        }
+        // Update site repo only if the site has not just been fetched
+        // for the first time.
+        if (!$siteJustFetched) {
+          // GitHub integration can be activated any time, so we must be ready
+          // to apply it.
+          $this->checkGitHubIntegration();
+          // Update the repo.
+          $this->updateRepository($this->extCurrentProject['repository_dir']);
+          // We only need to do this once for the project, not for every app;
+          // all apps are in the same repository.
+          $siteJustFetched = TRUE;
         }
       }
-      // Update site repo only if the site has not just been fetched
-      // for the first time.
-      if (!$siteJustFetched) {
-        // GitHub integration can be activated any time, so we must be ready
-        // to apply it.
-        $this->checkGitHubIntegration();
-        // Update the repo.
-        $this->updateRepository($this->extCurrentProject['repository_dir']);
-      }
-    }
 
-    // DB import.
-    if ($input->getOption('db-sync')) {
-      $this->runOtherCommand('drupal:db-sync', [
+      // DB import.
+      if ($input->getOption('db-sync')) {
+        $this->runOtherCommand('drupal:db-sync', [
+          '--environment' => self::$config->get('local.deploy.remote_environment'),
+          '--no-sanitize' => TRUE,
+          '--app' => $app->getId(),
+          'directory' => $this->extCurrentProject['root_dir'],
+        ]);
+      }
+
+      // Perform platform build.
+      $this->build($app, $project, $profile, $input->getOption('no-archive'), $input->getOption('core-branch'));
+
+      // If the profiles uses Elastic Search.
+      if (file_exists($this->extCurrentProject['www_dir'] . $app->wwwSubdir . '/profiles/' . $profile['name'] . '/modules/contrib/search_api_elasticsearch')) {
+        // Create Elastic Search indices.
+        $_reindex = $this->createElasticSearchIndices($project, $app);
+      }
+
+      // DB sanitize.
+      if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
+        $this->runOtherCommand('drupal:db-sanitize', [
+          'directory' => $this->extCurrentProject['root_dir'],
+          '--app' => $app->getId(),
+        ]);
+      }
+
+      // Run deployment hooks, if not requested otherwise.
+      if (!$input->getOption('no-deploy-hooks')) {
+        $this->runDeployHooks($project, $app);
+      }
+
+      // Mount remote file share.
+      $this->runOtherCommand('drupal:mount-files', [
         '--environment' => self::$config->get('local.deploy.remote_environment'),
-        '--no-sanitize' => TRUE,
         'directory' => $this->extCurrentProject['root_dir'],
       ]);
+
+      // Show unclean features, if not requested otherwise.
+      if (!$input->getOption('no-unclean-features')) {
+        $this->stdErr->writeln("<info>[*]</info> Checking the status of features...");
+        $this->runOtherCommand('drupal:unclean-features', ['directory' => $this->extCurrentProject['root_dir']]);
+      }
+
+      // Clean up builds.
+      $this->cleanBuilds();
+
+      // End of deployment.
+      $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain') . "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
+
+      if ($input->getOption('core-branch')) {
+        $this->stdErr->writeln("\n<info>NOTE:</info> The distro profile has not been symlinked because you have deployed using <info>[-c | --core-branch]</info>.");
+      }
     }
-
-    // Perform platform build.
-    $this->build($project, $profile, $input->getOption('no-archive'), $input->getOption('core-branch'));
-
-    // If the profiles uses Elastic Search.
-    if (file_exists($this->extCurrentProject['www_dir'] . '/profiles/' . $profile['name'] . '/modules/contrib/search_api_elasticsearch')) {
-      // Create Elastic Search indices.
-      $_reindex = $this->createElasticSearchIndices($project);
-    }
-
-    // DB sanitize.
-    if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
-      $this->runOtherCommand('drupal:db-sanitize', ['directory' => $this->extCurrentProject['root_dir']]);
-    }
-
-    // Run deployment hooks, if not requested otherwise.
-    if (!$input->getOption('no-deploy-hooks')) {
-      $this->runDeployHooks($project);
-    }
-
-    // Mount remote file share.
-    $this->runOtherCommand('drupal:mount-files', [
-      '--environment' => self::$config->get('local.deploy.remote_environment'),
-      'directory' => $this->extCurrentProject['root_dir'],
-    ]);
-
-    // Show unclean features, if not requested otherwise.
-    if (!$input->getOption('no-unclean-features')) {
-      $this->stdErr->writeln("<info>[*]</info> Checking the status of features...");
-      $this->runOtherCommand('drupal:unclean-features', ['directory' => $this->extCurrentProject['root_dir']]);
-    }
-
-    // Clean up builds.
-    $this->cleanBuilds();
-
-    // End of deployment.
-    $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain'). "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
-
-    if ($input->getOption('core-branch')) {
-      $this->stdErr->writeln("\n<info>NOTE:</info> The distro profile has not been symlinked because you have deployed using <info>[-c | --core-branch]</info>.");
-    }
-
   }
 
   /**
@@ -172,15 +205,16 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $noDeployHooks
    * @param $coreBranch
    */
-  private function build(Project $project, $profile, $noArchive, $coreBranch = NULL) {
+  private function build(LocalApplication $app, Project $project, $profile, $noArchive, $coreBranch = NULL) {
     $this->stdErr->writeln('<info>[*]</info> Building <info>' . $project->getProperty('title') . '</info> (' . $project->id . ')...');
 
     // This step is not required for projects that do not
     // use external distro profiles.
     if (is_array($profile)) {
+      $pathToMakefile = $this->extCurrentProject['repository_dir'] . $app->repoSubdir . '/project.make';
       // Temporarily override the project.make to use the local checkout of the
       // core profile, which must be on on the branch one desires to deploy.
-      $originalMakefile = file_get_contents($this->extCurrentProject['repository_dir'] . '/project.make');
+      $originalMakefile = file_get_contents($pathToMakefile);
       if ($coreBranch) {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[branch\] =) (.*)/', "$1 $coreBranch", $originalMakefile);
       }
@@ -189,42 +223,42 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[url\] =) (.*)/', "$1 " . $this->profilesRootDir . '/' . $profile['name'], $tempMakefile);
         $tempMakefile = preg_replace('/(projects\[' . $profile['name'] . '\]\[download\]\[type\] =) (.*)/', "$1 copy", $tempMakefile);
       }
-      file_put_contents($this->extCurrentProject['repository_dir'] . '/project.make', $tempMakefile);
+      file_put_contents($pathToMakefile, $tempMakefile);
     }
 
     // Build.
     $localBuildOptions['--yes'] = TRUE;
     $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
+    $localBuildOptions['--app'] = $app->getId();
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
     }
     $this->runOtherCommand('local:build', $localBuildOptions);
 
     // Make sure settings.local.php is up to date for the project.
-    $slugify = new Slugify();
-    $slugifiedProjectTitle = $project->title ? str_replace('-', '_', $slugify->slugify($project->title)) : $project->id;
+    $slugifiedProjectTitle = $this->getSlug($project, $app);
     $settings_local_php = sprintf($this->localSettingsFile(), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
       $sharedPath = $this->getProjectRoot() . '/.platform/local';
     }
-    file_put_contents($sharedPath . "/shared/settings.local.php", $settings_local_php);
+    file_put_contents($sharedPath . "/shared" . $app->wwwSubdir . "/settings.local.php", $settings_local_php);
 
     // This step is not required for projects that do not
     // use external distro profiles.
     if (is_array($profile)) {
       // Restore original project.make so that the site repo is clean.
-      file_put_contents($this->extCurrentProject['repository_dir'] . '/project.make', $originalMakefile);
+      file_put_contents($pathToMakefile, $originalMakefile);
 
       // Skip this step if $coreBranch is not NULL.
       if ($coreBranch == NULL) {
         $fs = new Filesystem();
 
         // Remove the .git directory that we got from the "build" of type "copy".
-        $fs->remove($this->extCurrentProject['root_dir'] . '/www/profiles/' . $profile['name'] . '/.git');
+        $fs->remove($this->extCurrentProject['root_dir'] . '/www' . $app->wwwSubdir . '/profiles/' . $profile['name'] . '/.git');
 
         // Obtain symlinks map for profile.
-        $linkMap = $this->mapProfileSymlinks($profile);
+        $linkMap = $this->mapProfileSymlinks($app, $profile);
 
         // Remove all files represented by $linkMap's keys.
         $fs->remove(array_keys($linkMap));
@@ -248,13 +282,14 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Checking out <info>" . $profile['name'] . "</info> for the first time...");
 
-    $git->cloneRepo($profile['url'],  $this->profilesRootDir . "/" . $profile['name'], array(
+    $git->cloneRepo($profile['url'], $this->profilesRootDir . "/" . $profile['name'], array(
       '--branch',
-      isset($profile['branch']) ? $profile['branch'] : self::$config->get('local.deploy.git_default_branch'),
+      isset($profile['branch']) ? $profile['branch'] :
+        self::$config->get('local.deploy.git_default_branch'),
     ));
 
     if (isset($profile['tag'])) {
-      $git->checkOut($profile['tag'],  $this->profilesRootDir . "/" . $profile['name'], TRUE);
+      $git->checkOut($profile['tag'], $this->profilesRootDir . "/" . $profile['name'], TRUE);
     }
   }
 
@@ -313,11 +348,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * Execute the deployment hooks.
    * @param $project
    */
-  private function runDeployHooks(Project $project) {
-    $localApplication = new LocalApplication($this->extCurrentProject['repository_dir']);
-    $appConfig = $localApplication->getConfig();
+  private function runDeployHooks(Project $project, LocalApplication $app) {
+    $appConfig = $app->getConfig();
 
-    $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->title</info> ($project->id)...");
+    $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id . '-' . $app->getId()</info>...");
 
     $sh = new ShellHelper();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
@@ -349,8 +383,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
   /**
    * Get information on the profile used by the project, if one is specified.
    */
-  private function getProfileInfo() {
-    $makefile = $this->extCurrentProject['repository_dir'] . '/project.make';
+  private function getProfileInfo(LocalApplication $app) {
+
+    $makefile = $this->extCurrentProject['repository_dir'] . $app->repoSubdir . '/project.make';
+
     if (file_exists($makefile)) {
       $ini = new ParserIni();
       $makeData = $ini->parse(file_get_contents($makefile));
@@ -372,10 +408,11 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $profile
    * @return array
    */
-  private function mapProfileSymlinks($profile) {
+  private function mapProfileSymlinks(LocalApplication $app, $profile) {
     $profileName = $profile['name'];
     $profileDir = $this->profilesRootDir . "/" . $profileName;
-    $wwwDir = $this->extCurrentProject['www_dir'];
+
+    $wwwDir = $this->extCurrentProject['www_dir'] . $app->wwwSubdir;
 
     // The keys of the $linkMap array are the files to remove.
     // The values are the files to symlink to, in place of the removed files.
@@ -424,10 +461,9 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $project
    * @return bool Whether or not to reindex.
    */
-  private function createElasticSearchIndices(Project $project) {
-    $slugify = new Slugify();
-    $slugifiedTitle = $project->title ? $slugify->slugify($project->title) : $project->id;
-    $dbName = self::$config->get('local.stack.mysql_db_prefix') . str_replace('-', '_', $slugifiedTitle);
+  private function createElasticSearchIndices(Project $project, LocalApplication $app) {
+    $slugifiedTitle = $this->getSlug($project, $app);
+    $dbName = self::$config->get('local.stack.mysql_db_prefix') . $slugifiedTitle;
     $elasticSearchBaseUrl = 'http://' . self::$config->get('local.stack.elasticsearch_host') . ":" . self::$config->get('local.stack.elasticsearch_port') . '/';
 
     // Use PHP MySQL APIs for these simple queries.

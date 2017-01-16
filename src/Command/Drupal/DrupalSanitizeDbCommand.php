@@ -23,25 +23,39 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
+
+    // Do it for each Drupal application in the project.
     foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
-      $this->_execute($input, $app);
+      if ($app->getConfig()['build']['flavor'] == 'drupal') {
+        $this->_execute($input, $app);
+      }
     }
   }
 
   protected function _execute(InputInterface $input, LocalApplication $app) {
-    $this->validateInput($input);
     $project = $this->getSelectedProject();
-    $wwwRoot = $app->getDocumentRoot();
+
+    // Work out the 'www' directory.
+    $wwwRoot = ($this->localProject->getLegacyProjectRoot() !== FALSE) ?
+      $this->localProject->getLegacyProjectRoot() . '/../www' :
+      $this->getProjectRoot() . '/_www';
+
+    // When the project is single-app with all files at the root of the repo,
+    // the 'www' dir is a link to the webroot. In all other cases, the 'www' dir
+    // will contain symlinks to all the webroots, named after the app's id.
+    if ("public" != $app->getDocumentRoot()) {
+      $wwwRoot .= '/' . $app->getId();
+    }
 
     /* @var DrushHelper $dh */
     $dh = $this->getHelper('drush');
 
     $dh->ensureInstalled();
     try {
-      $this->stdErr->writeln("Sanitizing database for <info>" . $project->id . $app->getId() . "</info>");
+      $this->stdErr->writeln("Sanitizing database for <info>" . $project->id . '-' . $app->getId() . "</info>");
       $dh->execute([
         '-y',
         'sql-sanitize',
