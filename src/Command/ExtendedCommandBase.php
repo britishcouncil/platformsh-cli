@@ -2,6 +2,7 @@
 
 namespace Platformsh\Cli\Command;
 
+use Cocur\Slugify\Slugify;
 use Platformsh\Cli\Local\LocalApplication;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputArgument;
