@@ -70,13 +70,13 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     if (!$this->isMounted($project, $app)) {
       // Account for Legacy projects CLI < 3.x
       if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
-        $sharedPath = $this->getProjectRoot() . '/.platform/local' . $app->wwwSubdir;
+        $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
-      $command = sprintf('sshfs %s-%s--%s@ssh.' . $project->getProperty('region') . '.platform.sh:/app/' . $app->remoteDocRoot . '/sites/default/files %s/shared/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $sharedPath);
+      $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app%s/sites/default/files %s/shared%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->remoteDocRoot, $sharedPath, $app->wwwSubdir);
       $sshfs = new Process($command);
       $sshfs->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
       try {
-        $this->stdErr->writeln("Mounting files from environment <info>" . $project->id . '-' . $input->getOption('environment') . '--' . $app->getId() . "</info> to <info>" . $project->id . '-' . "local -- " . $app->getId() . "</info>.");
+        $this->stdErr->writeln("Mounting files from environment <info>" . $project->id . '-' . $input->getOption('environment') . '--' . $app->getId() . "</info> to <info>" . $project->id . '-' . "local--" . $app->getId() . "</info>.");
         $sshfs->mustRun();
       }
       catch (ProcessFailedException $e) {
