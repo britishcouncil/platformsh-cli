@@ -229,7 +229,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Build.
     $localBuildOptions['--yes'] = TRUE;
     $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
-    $localBuildOptions['--app'] = $app->getId();
+    $localBuildOptions['app'] = $app->getId();
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
     }
