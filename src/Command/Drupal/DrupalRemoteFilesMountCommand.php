@@ -63,7 +63,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     }
     else {
       $app->repoSubdir = $app->wwwSubdir = '';
-      $app->remoteDocRoot = 'public';
+      $app->remoteDocRoot = '/public';
     }
 
     // Mount remote file share only if not mounted already.
