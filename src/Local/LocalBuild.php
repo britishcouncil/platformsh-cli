@@ -185,7 +185,7 @@ class LocalBuild
         $destination = $destination ?: $sourceDir . '/' . $this->config->get('local.web_root');
         $appRoot = $app->getRoot();
         $appConfig = $app->getConfig();
-        $multiApp = $appRoot != $sourceDir;
+        $multiApp = true; // $appRoot != $sourceDir;
         $appId = $app->getId();
 
         $toolstack = $app->getToolstack();
@@ -309,12 +309,13 @@ class LocalBuild
 
             return false;
         }
-
-        $appDir = str_replace('/', '-', $appId);
-        if (is_link($destination)) {
-            $this->fsHelper->remove($destination);
+        if ($multiApp) {
+            $appDir = str_replace('/', '-', $appId);
+            if (is_link($destination)) {
+                $this->fsHelper->remove($destination);
+            }
+            $destination .= "/$appDir";
         }
-        $destination .= "/$appDir";
 
         $this->fsHelper->symlink($webRoot, $destination);
 
