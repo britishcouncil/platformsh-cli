@@ -309,13 +309,12 @@ class LocalBuild
 
             return false;
         }
-        if ($multiApp) {
-            $appDir = str_replace('/', '-', $appId);
-            if (is_link($destination)) {
-                $this->fsHelper->remove($destination);
-            }
-            $destination .= "/$appDir";
+
+        $appDir = str_replace('/', '-', $appId);
+        if (is_link($destination)) {
+            $this->fsHelper->remove($destination);
         }
+        $destination .= "/$appDir";
 
         $this->fsHelper->symlink($webRoot, $destination);
 
