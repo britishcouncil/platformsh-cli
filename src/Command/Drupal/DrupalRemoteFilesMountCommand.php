@@ -60,7 +60,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
       if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
         $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
-      $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app%s/sites/default/files %s/shared%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->getDocumentRoot(), $sharedPath, $app->getId());
+      $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app/%s/sites/default/files %s/shared/%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->getDocumentRoot(), $sharedPath, $app->getId());
       $sshfs = new Process($command);
       $sshfs->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
       try {
