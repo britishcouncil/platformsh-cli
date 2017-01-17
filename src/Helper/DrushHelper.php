@@ -233,7 +233,7 @@ class DrushHelper extends Helper implements OutputAwareInterface
         // Gather applications.
         $apps = LocalApplication::getApplications($projectRoot, $this->config);
         $drupalApps = $apps;
-        $multiApp = false;
+        $multiApp = true;
         if (count($apps) > 1) {
             $multiApp = true;
             // Remove non-Drupal applications.
@@ -281,9 +281,8 @@ class DrushHelper extends Helper implements OutputAwareInterface
             $appId = $app->getId();
             $localAliasName = '_local';
             $webRoot = $projectRoot . '/' . $localWebRoot;
-            if (count($drupalApps) > 1) {
-                $localAliasName .= '--' . $appId;
-            }
+            $localAliasName .= '--' . $appId;
+
             if ($multiApp) {
                 $webRoot .= '/' . $appId;
             }

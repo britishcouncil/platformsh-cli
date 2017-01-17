@@ -43,8 +43,8 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
     // on it. This is why we have this additional variable put into the ENV
     // before running the process.
     putenv('COLUMNS=512');
-    $alias = basename(realpath($input->getArgument('directory')) . '/' . $app->getDocumentRoot());
-    $p = new Process("drush @$alias._local fl --status=enabled");
+    $alias = basename(realpath($input->getArgument('directory')));
+    $p = new Process("drush @$alias._local--$app->getId() fl --status=enabled");
     $p->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
     try {
       $p->mustRun();
