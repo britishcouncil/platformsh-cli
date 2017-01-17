@@ -53,18 +53,6 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
 
   private function _execute(InputInterface $input, LocalApplication $app) {
     $project = $this->getSelectedProject();
-    // When the project is single-app with all files at the root of the repo,
-    // the 'www' dir is a link to the webroot. In all other cases, the 'www' dir
-    // will contain symlinks to all the webroots, named after the app's id.
-    if (($app->repoSubdir = $app->getDocumentRoot()) != 'public') {
-      $app->wwwSubdir = '/' . $app->getId();
-      $app->repoSubdir = '/' . $app->repoSubdir;
-      $app->remoteDocRoot = $app->repoSubdir;
-    }
-    else {
-      $app->repoSubdir = $app->wwwSubdir = '';
-      $app->remoteDocRoot = '/public';
-    }
 
     // Mount remote file share only if not mounted already.
     if (!$this->isMounted($project, $app)) {
@@ -72,7 +60,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
       if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
         $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
-      $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app%s/sites/default/files %s/shared%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->remoteDocRoot, $sharedPath, $app->wwwSubdir);
+      $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app%s/sites/default/files %s/shared%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->getDocumentRoot(), $sharedPath, $app->getId());
       $sshfs = new Process($command);
       $sshfs->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
       try {

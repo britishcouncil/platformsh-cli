@@ -93,17 +93,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         continue;
       }
 
-      // When the project is single-app with all files at the root of the repo,
-      // the 'www' dir is a link to the webroot. In all other cases, the 'www' dir
-      // will contain symlinks to all the webroots, named after the app's id.
-      if (($app->repoSubdir = $app->getDocumentRoot()) != 'public') {
-        $app->wwwSubdir = '/' . $app->getId();
-        $app->repoSubdir = '/' . $app->repoSubdir;
-      }
-      else {
-        $app->repoSubdir = $app->wwwSubdir = '';
-      }
-
       // Check for profile info.
       $profile = $this->getProfileInfo($app);
 
@@ -155,7 +144,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $this->build($app, $project, $profile, $input->getOption('no-archive'), $input->getOption('core-branch'));
 
       // If the profiles uses Elastic Search.
-      if (file_exists($this->extCurrentProject['www_dir'] . $app->wwwSubdir . '/profiles/' . $profile['name'] . '/modules/contrib/search_api_elasticsearch')) {
+      if (file_exists($this->extCurrentProject['www_dir'] . '/' . $app->getId() . '/profiles/' . $profile['name'] . '/modules/contrib/search_api_elasticsearch')) {
         // Create Elastic Search indices.
         $_reindex = $this->createElasticSearchIndices($project, $app);
       }
@@ -215,7 +204,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // This step is not required for projects that do not
     // use external distro profiles.
     if (is_array($profile)) {
-      $pathToMakefile = $this->extCurrentProject['repository_dir'] . $app->repoSubdir . '/project.make';
+      $pathToMakefile = $app->getRoot() . '/project.make';
       // Temporarily override the project.make to use the local checkout of the
       // core profile, which must be on on the branch one desires to deploy.
       $originalMakefile = file_get_contents($pathToMakefile);
@@ -246,7 +235,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
       $sharedPath = $this->getProjectRoot() . '/.platform/local';
     }
-    file_put_contents($sharedPath . "/shared" . $app->wwwSubdir . "/settings.local.php", $settings_local_php);
+    file_put_contents($sharedPath . "/shared" . $app->getId() . "/settings.local.php", $settings_local_php);
 
     // This step is not required for projects that do not
     // use external distro profiles.
@@ -259,7 +248,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         $fs = new Filesystem();
 
         // Remove the .git directory that we got from the "build" of type "copy".
-        $fs->remove($this->extCurrentProject['root_dir'] . '/www' . $app->wwwSubdir . '/profiles/' . $profile['name'] . '/.git');
+        $fs->remove($this->extCurrentProject['root_dir'] . '/www' . $app->getId() . '/profiles/' . $profile['name'] . '/.git');
 
         // Obtain symlinks map for profile.
         $linkMap = $this->mapProfileSymlinks($app, $profile);
@@ -363,10 +352,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         if (strlen($hook) > 0) {
           $this->stdErr->writeln("Running <info>$hook</info>");
           if (stripos($hook, 'updb')) {
-            $sh->executeSimple($hook, $this->extCurrentProject['www_dir'] . $app->wwwSubdir);
+            $sh->executeSimple($hook, $this->extCurrentProject['www_dir'] . $app->getId());
           }
           else {
-            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir'] . $app->wwwSubdir);
+            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir'] . $app->getId());
           }
         }
       }
@@ -388,7 +377,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * Get information on the profile used by the project, if one is specified.
    */
   private function getProfileInfo(LocalApplication $app) {
-    $makefile = $this->extCurrentProject['repository_dir'] . $app->repoSubdir . '/project.make';
+    $makefile = $app->getRoot() . '/project.make';
 
     if (file_exists($makefile)) {
       $ini = new ParserIni();
@@ -415,7 +404,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $profileName = $profile['name'];
     $profileDir = $this->profilesRootDir . "/" . $profileName;
 
-    $wwwDir = $this->extCurrentProject['www_dir'] . $app->wwwSubdir;
+    $wwwDir = $this->extCurrentProject['www_dir'] . $app->getId();
 
     // The keys of the $linkMap array are the files to remove.
     // The values are the files to symlink to, in place of the removed files.

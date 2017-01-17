@@ -42,13 +42,7 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
     $wwwRoot = ($this->localProject->getLegacyProjectRoot() !== FALSE) ?
       $this->localProject->getLegacyProjectRoot() . '/../www' :
       $this->getProjectRoot() . '/_www';
-
-    // When the project is single-app with all files at the root of the repo,
-    // the 'www' dir is a link to the webroot. In all other cases, the 'www' dir
-    // will contain symlinks to all the webroots, named after the app's id.
-    if ("public" != $app->getDocumentRoot()) {
-      $wwwRoot .= '/' . $app->getId();
-    }
+    $wwwRoot .= '/' . $app->getId();
 
     /* @var DrushHelper $dh */
     $dh = $this->getHelper('drush');
