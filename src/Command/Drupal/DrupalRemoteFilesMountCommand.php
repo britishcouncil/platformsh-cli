@@ -41,10 +41,10 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
    * @param \Platformsh\Cli\Model\Project
    * @return bool
    */
-  private function isMounted(Project $project, LocalApplication $app) {
+  private function isMounted($check) {
     $mounts = file('/proc/mounts');
     foreach ($mounts as $mount) {
-      if (strpos($mount, $project->id . '--' . $app->getId()) > -1) {
+      if (strpos($mount, $check) > -1) {
         return TRUE;
       }
     }
@@ -55,7 +55,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     $project = $this->getSelectedProject();
 
     // Mount remote file share only if not mounted already.
-    if (!$this->isMounted($project, $app)) {
+    if (!$this->isMounted($project->id . '-' . $input->getOption('environment') . '--' . $app->getId())) {
       // Account for Legacy projects CLI < 3.x
       if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
         $sharedPath = $this->getProjectRoot() . '/.platform/local';
