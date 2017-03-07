@@ -48,6 +48,12 @@ abstract class ExtendedCommandBase extends CommandBase {
       }
     }
 
+    if ($input->hasOption('environment')) {
+      if (!$input->getOption('environment')) {
+        $input->setOption('environment', self::$config->get('local.deploy.git_default_branch'));
+      }
+    }
+
     parent::validateInput($input, $envNotRequired);
 
     // Some config.

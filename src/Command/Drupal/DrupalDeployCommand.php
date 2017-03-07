@@ -24,6 +24,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
          ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build')
          ->addOption('db-sync', 'd', InputOption::VALUE_NONE, "Sync project's database with the daily live backup.")
          ->addOption('core-branch', 'c', InputOption::VALUE_REQUIRED, "The core profile's branch to use during deployment")
+         ->addOption('environment', 'e', InputOption::VALUE_OPTIONAL, "The environment ID to clone. Defaults to local:deploy:git_default_branch's value in the config.yaml")
          ->addOption('no-archive', 'A', InputOption::VALUE_NONE, 'Do not create or use a build archive. Run \'platform help build\' for more info.')
          ->addOption('no-deploy-hooks', 'D', InputOption::VALUE_NONE, 'Do not run deployment hooks (drush commands).')
          ->addOption('no-git-pull', 'G', InputOption::VALUE_NONE, 'Do not fetch updates for Git repositories. ')
@@ -62,7 +63,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // If the project was never deployed before.
     if (!is_dir($this->extCurrentProject['root_dir'] . '/www') && !is_dir($this->extCurrentProject['root_dir'] . '/_www')) {
-      $this->fetchSite($project);
+      $this->fetchSite($project, $input->getOption('environment'));
       // DB sync is required the first time the project is deployed.
       $input->setOption('db-sync', InputOption::VALUE_NONE);
       $siteJustFetched = TRUE;
@@ -291,14 +292,14 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $project
    * @throws \Exception
    */
-  private function fetchSite(Project $project) {
+  private function fetchSite(Project $project, $env = NULL) {
     /** @var $git GitHelper */
     $git = $this->getHelper('git');
     $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Fetching <info>" . $project->getProperty('title') . "</info> (" . $project->id . ") for the first time...");
     $this->runOtherCommand('project:get', [
       '--yes' => TRUE,
-      '--environment' => self::$config->get('local.deploy.git_default_branch'),
+      '--environment' => $env,
       'id' => $project->id,
       'directory' => $this->extCurrentProject['root_dir'],
     ]);
