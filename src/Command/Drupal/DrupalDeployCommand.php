@@ -124,7 +124,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
           // to apply it.
           $this->checkGitHubIntegration();
           // Update the repo.
-          $this->updateRepository($this->extCurrentProject['repository_dir']);
+          $this->updateRepository($this->extCurrentProject['repository_dir'], $input->getOption('environment'));
           // We only need to do this once for the project, not for every app;
           // all apps are in the same repository.
           $siteJustFetched = TRUE;
@@ -293,16 +293,21 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @throws \Exception
    */
   private function fetchSite(Project $project, $env = NULL) {
-    /** @var $git GitHelper */
-    $git = $this->getHelper('git');
-    $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Fetching <info>" . $project->getProperty('title') . "</info> (" . $project->id . ") for the first time...");
     $this->runOtherCommand('project:get', [
       '--yes' => TRUE,
-      '--environment' => $env,
+      '--environment' => self::$config->get('local.deploy.git_default_branch'),
       'id' => $project->id,
       'directory' => $this->extCurrentProject['root_dir'],
     ]);
+    if (!empty($env)) {
+      /** @var $git GitHelper */
+      $git = $this->getHelper('git');
+      $git->ensureInstalled();
+      $git->execute(array('reset', '--hard'), $this->extCurrentProject['root_dir']);
+      chdir($this->extCurrentProject['root_dir']);
+      $this->runOtherCommand('environment:checkout', ['id' => $env]);
+    }
   }
 
   /**
@@ -323,12 +328,15 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    *  Directory where the checked out repo lives.
    * @throws \Exception
    */
-  private function updateRepository($dir) {
+  private function updateRepository($dir, $branch = NULL) {
     /** @var $git GitHelper */
     $git = $this->getHelper('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($dir);
     $this->stdErr->write(sprintf("<info>[*]</info> Updating <info>%s/%s</info>...", basename(str_ireplace(':', '/', $git->getConfig('remote.origin.url')), '.git'), $git->getCurrentBranch()));
+    if ($branch) {
+      $git->checkOut($branch, $dir);
+    }
     $git->execute(array('pull'));
     $git->execute(array(
       'pull',
