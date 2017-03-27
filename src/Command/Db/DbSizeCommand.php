@@ -3,13 +3,13 @@ namespace Platformsh\Cli\Command\Db;
 
 use Platformsh\Cli\Command\CommandBase;
 use Platformsh\Cli\Exception\RootNotFoundException;
-use Platformsh\Cli\Helper\ShellHelper;
+use Platformsh\Cli\Service\Shell;
 use Platformsh\Cli\Local\LocalApplication;
-use Platformsh\Cli\Util\RelationshipsUtil;
-use Platformsh\Cli\Util\Table;
+use Platformsh\Cli\Service\Ssh;
+use Platformsh\Cli\Service\Relationships;
+use Platformsh\Cli\Service\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Yaml\Yaml;
 
 class DbSizeCommand extends CommandBase
 {
@@ -21,9 +21,10 @@ class DbSizeCommand extends CommandBase
             ->setHelp(
                 "This command provides an estimate of the database's disk usage. It is not guaranteed to be reliable."
             );
-        RelationshipsUtil::configureInput($this->getDefinition());
         $this->addProjectOption()->addEnvironmentOption()->addAppOption();
-        Table::addFormatOption($this->getDefinition());
+        Relationships::configureInput($this->getDefinition());
+        Table::configureInput($this->getDefinition());
+        Ssh::configureInput($this->getDefinition());
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -46,8 +47,10 @@ class DbSizeCommand extends CommandBase
             return 1;
         }
 
-        $util = new RelationshipsUtil($this->stdErr);
-        $database = $util->chooseDatabase($sshUrl, $input);
+        /** @var \Platformsh\Cli\Service\Relationships $relationships */
+        $relationships = $this->getService('relationships');
+
+        $database = $relationships->chooseDatabase($sshUrl, $input, $output);
         if (empty($database)) {
             $this->stdErr->writeln('No database selected.');
             return 1;
@@ -67,7 +70,9 @@ class DbSizeCommand extends CommandBase
         }
 
         // Load services yaml.
-        $services = Yaml::parse(file_get_contents($projectRoot . '/.platform/services.yaml'));
+        /** @var \Platformsh\Cli\Local\LocalProject $localProject */
+        $localProject = $this->getService('local.project');
+        $services = (array) $localProject->readProjectConfigFile($projectRoot, 'services.yaml');
         if (!empty($services[$dbServiceName]['disk'])) {
             $allocatedDisk = $services[$dbServiceName]['disk'];
         } else {
@@ -78,26 +83,31 @@ class DbSizeCommand extends CommandBase
         $this->stdErr->write('Querying database <comment>' . $dbServiceName . '</comment> to estimate disk usage. ');
         $this->stdErr->writeln('This might take a while.');
 
-        /** @var ShellHelper $shellHelper */
-        $shellHelper = $this->getHelper('shell');
+        /** @var Shell $shell */
+        $shell = $this->getService('shell');
+        /** @var \Platformsh\Cli\Service\Ssh $ssh */
+        $ssh = $this->getService('ssh');
+
         $command = ['ssh'];
+        $command = array_merge($command, $ssh->getSshArgs());
         $command[] = $sshUrl;
         switch ($database['scheme']) {
             case 'pgsql':
                 $command[] = $this->psqlQuery($database);
-                $result = $shellHelper->execute($command);
+                $result = $shell->execute($command, null, true);
                 $resultArr = explode(PHP_EOL, $result);
                 $estimatedUsage = array_sum($resultArr) / 1048576;
                 break;
             default:
                 $command[] = $this->mysqlQuery($database);
-                $estimatedUsage = $shellHelper->execute($command);
+                $estimatedUsage = $shell->execute($command, null, true);
                 break;
         }
 
         $percentsUsed = $estimatedUsage * 100 / $allocatedDisk;
 
-        $table = new Table($input, $output);
+        /** @var \Platformsh\Cli\Service\Table $table */
+        $table = $this->getService('table');
         $propertyNames = [
             'max',
             'used',
@@ -132,16 +142,12 @@ class DbSizeCommand extends CommandBase
           . ' GROUP BY pg_class.relkind, nspname'
           . ' ORDER BY sum(pg_relation_size(pg_class.oid)) DESC;';
 
-        $dbUrl = sprintf(
-            'postgresql://%s:%s@%s/%s',
-            $database['username'],
-            $database['password'],
-            $database['host'],
-            $database['path']
-        );
+        /** @var \Platformsh\Cli\Service\Relationships $relationships */
+        $relationships = $this->getService('relationships');
+        $dbUrl = $relationships->getSqlCommandArgs('psql', $database);
 
         return sprintf(
-            "psql --echo-hidden -t --no-align %s -c '%s' 2>&1",
+            "psql --echo-hidden -t --no-align %s -c '%s'",
             $dbUrl,
             $query
         );
@@ -164,17 +170,12 @@ class DbSizeCommand extends CommandBase
             . '/' . (1048576 + 150) . ' AS estimated_actual_disk_usage'
             . ' FROM information_schema.tables';
 
-        $connectionParams = sprintf(
-            '--user=%s --password=%s --host=%s --database=%s --port=%d',
-            $database['username'],
-            $database['password'],
-            $database['host'],
-            $database['path'],
-            $database['port']
-        );
+        /** @var \Platformsh\Cli\Service\Relationships $relationships */
+        $relationships = $this->getService('relationships');
+        $connectionParams = $relationships->getSqlCommandArgs('mysql', $database);
 
         return sprintf(
-            "mysql %s --no-auto-rehash --raw --skip-column-names --execute '%s' 2>&1",
+            "mysql %s --no-auto-rehash --raw --skip-column-names --execute '%s'",
             $connectionParams,
             $query
         );
