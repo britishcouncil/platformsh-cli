@@ -2,6 +2,7 @@
 
 namespace Platformsh\Cli\Service;
 
+use Platformsh\Cli\Util\OsUtil;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem as SymfonyFilesystem;
 
@@ -46,7 +47,7 @@ class Filesystem
     public function setRelativeLinks($relative = true)
     {
         // This is not possible on Windows.
-        if ($this->isWindows()) {
+        if (OsUtil::isWindows()) {
             $relative = false;
         }
         $this->relative = $relative;
@@ -116,21 +117,23 @@ class Filesystem
     }
 
     /**
-     * @return string The absolute path to the user's home directory.
+     * @return string The absolute path to the user's home directory
      */
     public static function getHomeDirectory()
     {
-        $home = getenv('HOME');
-        if (empty($home)) {
-            // Windows compatibility.
-            if ($userProfile = getenv('USERPROFILE')) {
-                $home = $userProfile;
-            } elseif (!empty($_SERVER['HOMEDRIVE']) && !empty($_SERVER['HOMEPATH'])) {
-                $home = $_SERVER['HOMEDRIVE'] . $_SERVER['HOMEPATH'];
+        foreach (['HOME', 'USERPROFILE'] as $envVar) {
+            if ($value = getenv($envVar)) {
+                if (!is_dir($value)) {
+                    throw new \RuntimeException(
+                        sprintf('Invalid environment variable %s: %s (not a directory)', $envVar, $value)
+                    );
+                }
+
+                return $value;
             }
         }
 
-        return $home;
+        throw new \RuntimeException('Could not determine home directory');
     }
 
     /**
@@ -212,8 +215,8 @@ class Filesystem
     /**
      * Create a symbolic link to a file or directory.
      *
-     * @param string $target
-     * @param string $link
+     * @param string $target The target to link to (must already exist).
+     * @param string $link   The name of the symbolic link.
      */
     public function symlink($target, $link)
     {
@@ -221,7 +224,7 @@ class Filesystem
             throw new \InvalidArgumentException('Target not found: ' . $target);
         }
         if ($this->relative) {
-            $target = rtrim($this->fs->makePathRelative($target, dirname($link)), '/');
+            $target = rtrim($this->fs->makePathRelative(realpath($target), dirname($link)), '/');
         }
         $this->fs->symlink($target, $link, $this->copyOnWindows);
     }
@@ -383,7 +386,7 @@ class Filesystem
      */
     protected function fixTarPath($path)
     {
-        if ($this->isWindows()) {
+        if (OsUtil::isWindows()) {
             $path = preg_replace_callback(
                 '#^([A-Z]):/#i',
                 function (array $matches) {
@@ -408,13 +411,5 @@ class Filesystem
             }
         }
         throw new \RuntimeException("Tar command not found");
-    }
-
-    /**
-     * @return bool
-     */
-    protected function isWindows()
-    {
-        return stripos(PHP_OS, 'WIN') === 0;
     }
 }
