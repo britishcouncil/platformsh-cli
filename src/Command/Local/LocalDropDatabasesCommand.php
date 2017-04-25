@@ -15,8 +15,8 @@ class LocalDropDatabasesCommand extends CommandBase {
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {
-    if ($connection = mysqli_connect(self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_root_user'), self::$config->get('local.stack.mysql_root_password'))) {
-      $r = mysqli_query($connection, "SHOW DATABASES LIKE '" . self::$config->get('local.stack.mysql_db_prefix') . "%'");
+    if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), $this->config()->get('local.stack.mysql_root_password'))) {
+      $r = mysqli_query($connection, "SHOW DATABASES LIKE '" . $this->config()->get('local.stack.mysql_db_prefix') . "%'");
       $databases = mysqli_fetch_all($r);
 
       if (count($databases)) {

@@ -25,7 +25,7 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
     $apps = $input->getOption('app');
 
     // Do it for each Drupal application in the project.
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
@@ -39,8 +39,8 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
     $project = $this->getSelectedProject();
 
     // Work out the 'www' directory.
-    $wwwRoot = ($this->localProject->getLegacyProjectRoot() !== FALSE) ?
-      $this->localProject->getLegacyProjectRoot() . '/../www' :
+    $wwwRoot = ($this->getService('local.project')->getLegacyProjectRoot() !== FALSE) ?
+      $this->getService('local.project')->getLegacyProjectRoot() . '/../www' :
       $this->getProjectRoot() . '/_www';
     $wwwRoot .= '/' . $app->getId();
 

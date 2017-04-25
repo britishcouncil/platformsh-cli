@@ -73,7 +73,7 @@ class DrupalTestEnvironmentCommand extends ExtendedCommandBase {
     // or the test environment's name if we are refreshing a pre-existing
     // environment for testing.
     $getEnv = $input->getOption('refresh') ? $testEnv :
-      self::$config->get('local.deploy.git_default_branch');
+      $this->config()->get('local.deploy.git_default_branch');
 
     $this->stdErr->write("<info>[*]</info> Obtaining project <info>$projectTitle</info> ($pid)...");
     $ret = $this->runOtherCommand('project:get', [
@@ -94,7 +94,7 @@ class DrupalTestEnvironmentCommand extends ExtendedCommandBase {
     $this->setProjectRoot($this->extCurrentProject['root_dir']);
 
     // Set more info about the current project.
-    $this->extCurrentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
+    $this->extCurrentProject['legacy'] = $this->getService('local.project')->getLegacyProjectRoot() !== FALSE;
     $this->extCurrentProject['repository_dir'] = $this->extCurrentProject['legacy'] ?
       $this->extCurrentProject['root_dir'] . '/repository' :
       $this->extCurrentProject['root_dir'];
@@ -109,7 +109,7 @@ class DrupalTestEnvironmentCommand extends ExtendedCommandBase {
       $this->stdErr->write("<info>[*]</info> Creating environment <info>$testEnv</info> on <info>$projectTitle</info> ($pid)...");
       $ret = $this->runOtherCommand('environment:branch', [
         'id' => $testEnv,
-        'parent' => self::$config->get('local.deploy.git_default_branch'),
+        'parent' => $this->config()->get('local.deploy.git_default_branch'),
         '--project' => $pid,
       ], new NullOutput());
       $this->stdErr->writeln("<info>[ok]</info>");

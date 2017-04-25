@@ -26,7 +26,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
@@ -57,12 +57,12 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     // Mount remote file share only if not mounted already.
     if (!$this->isMounted($project->id . '-' . $input->getOption('environment') . '--' . $app->getId())) {
       // Account for Legacy projects CLI < 3.x
-      if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
+      if (!($sharedPath = $this->getService('local.project')->getLegacyProjectRoot())) {
         $sharedPath = $this->getProjectRoot() . '/.platform/local';
       }
       $command = sprintf('sshfs %s-%s--%s@ssh.%s.platform.sh:/app/%s/sites/default/files %s/shared/%s/files -o allow_other -o workaround=all -o nonempty -o reconnect -o umask=0000', $project->id, $input->getOption('environment'), $app->getId(), $project->getProperty('region'), $app->getDocumentRoot(), $sharedPath, $app->getId());
       $sshfs = new Process($command);
-      $sshfs->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
+      $sshfs->setTimeout($this->config()->get('local.deploy.external_process_timeout'));
       try {
         $this->stdErr->writeln("Mounting files from environment <info>" . $project->id . '-' . $input->getOption('environment') . '--' . $app->getId() . "</info> to <info>" . $project->id . '-' . "local--" . $app->getId() . "</info>.");
         $sshfs->mustRun();

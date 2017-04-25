@@ -55,7 +55,7 @@ abstract class CommandBase extends Command implements CanHideInListInterface, Mu
     private $input;
 
     /** @var OutputInterface|null */
-    private $output;
+    protected $output;
 
     /**
      * @see self::setHiddenAliases()

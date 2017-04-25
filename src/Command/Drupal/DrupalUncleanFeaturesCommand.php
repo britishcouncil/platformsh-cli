@@ -24,7 +24,7 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
@@ -45,7 +45,7 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
     putenv('COLUMNS=512');
     $alias = basename(realpath($input->getArgument('directory')));
     $p = new Process("drush @$alias._local--" . $app->getId() . " fl --status=enabled");
-    $p->setTimeout(self::$config->get('local.deploy.external_process_timeout'));
+    $p->setTimeout($this->config()->get('local.deploy.external_process_timeout'));
     try {
       $p->mustRun();
       $output = array_filter(explode("\n", $p->getOutput()), function ($value) {
