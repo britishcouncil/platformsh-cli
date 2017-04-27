@@ -4,7 +4,6 @@ namespace Platformsh\Cli\Command\Drupal;
 
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Local\LocalApplication;
-use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -26,10 +25,12 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config()) as $app) {
+      // If --app was specified, only allow those apps.
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
       }
+      // Also, only allow Drupal apps.
       if ($app->getConfig()['build']['flavor'] == 'drupal') {
         $this->_execute($input, $app);
       }
@@ -51,6 +52,9 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
     return FALSE;
   }
 
+  /**
+   * Helper function.
+   */
   private function _execute(InputInterface $input, LocalApplication $app) {
     $project = $this->getSelectedProject();
 
@@ -64,7 +68,7 @@ class DrupalRemoteFilesMountCommand extends ExtendedCommandBase {
       $sshfs = new Process($command);
       $sshfs->setTimeout($this->config()->get('local.deploy.external_process_timeout'));
       try {
-        $this->stdErr->writeln("Mounting files from environment <info>" . $project->id . '-' . $input->getOption('environment') . '--' . $app->getId() . "</info> to <info>" . $project->id . '-' . "local--" . $app->getId() . "</info>.");
+        $this->stdErr->writeln(sprintf("Mounting local files from <info>%s</info>", $project->id . '-' . $input->getOption('environment') . '--' . $app->getId()));
         $sshfs->mustRun();
       }
       catch (ProcessFailedException $e) {
