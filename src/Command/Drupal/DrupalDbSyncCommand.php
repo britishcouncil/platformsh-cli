@@ -40,6 +40,9 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     }
   }
 
+  /**
+   * Helper function.
+   */
   protected function _execute(InputInterface $input, LocalApplication $app) {
     $project = $this->getSelectedProject();
     $envId = $input->getOption('environment');
