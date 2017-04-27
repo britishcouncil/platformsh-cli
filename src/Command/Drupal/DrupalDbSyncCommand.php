@@ -3,8 +3,8 @@
 namespace Platformsh\Cli\Command\Drupal;
 
 use Platformsh\Cli\Command\ExtendedCommandBase;
-use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
+use Platformsh\Cli\Service\Shell;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -28,10 +28,12 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
-      if ($apps && !in_array($app->getId(), $apps)) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config()) as $app) {
+      // If --app was specified, only allow those apps.
+      if (!empty($apps) && !in_array($app->getId(), $apps)) {
         continue;
       }
+      // Also, only allow Drupal apps.
       if ($app->getConfig()['build']['flavor'] == 'drupal') {
         $this->_execute($input, $app);
       }
@@ -44,14 +46,14 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $slugifiedTitle = $this->getSlug($project, $app);
     $backupPath = $this->config()->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '_' . $slugifiedTitle . '.sql';
 
-    $this->stdErr->writeln("Importing live database backup for <info>" . $project->id . '-' . $app->getId() . "</info>");
+    $this->stdErr->writeln(sprintf("Importing database from <info>%s<info>", $project->id . '-' . $app->getId() .  '-' . $envId));
 
     // Get a fresh SQL dump if necessary.
     if (!file_exists($backupPath)) {
       $this->stdErr->writeln("Downloading backup to: <info>$backupPath</info>");
 
       // SCP and GUNZIP compressed database backup.
-      $sh = new ShellHelper();
+      $sh = new Shell();
       $sh->execute([
         'scp',
         $project->id . "-" . $envId . "--" . $app->getId() . "@ssh." . $project->getProperty('region') . ".platform.sh:~/private/" . $project->id . ".sql.gz",
