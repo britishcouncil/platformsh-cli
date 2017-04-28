@@ -2,7 +2,7 @@
 namespace Platformsh\Cli\Command\Environment;
 
 use Platformsh\Cli\Command\CommandBase;
-use Platformsh\Cli\Util\Table;
+use Platformsh\Cli\Service\Table;
 use Platformsh\Client\Model\Environment;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -31,23 +31,29 @@ class EnvironmentListCommand extends CommandBase
             ->addOption('refresh', null, InputOption::VALUE_REQUIRED, 'Whether to refresh the list.', 1)
             ->addOption('sort', null, InputOption::VALUE_REQUIRED, 'A property to sort by', 'title')
             ->addOption('reverse', null, InputOption::VALUE_NONE, 'Sort in reverse (descending) order');
-        Table::addFormatOption($this->getDefinition());
+        Table::configureInput($this->getDefinition());
         $this->addProjectOption();
     }
 
     /**
      * Build a tree out of a list of environments.
      *
-     * @param Environment[] $environments
-     * @param string        $parent
+     * @param Environment[] $environments The list of environments, keyed by ID.
+     * @param string|null   $parent       The parent environment for which to
+     *                                    build a tree.
      *
-     * @return array
+     * @return Environment[] A list of the children of $parent, keyed by ID.
+     *                       Children of all environments are stored in the
+     *                       property $this->children.
      */
     protected function buildEnvironmentTree(array $environments, $parent = null)
     {
         $children = [];
         foreach ($environments as $environment) {
-            if ($environment->parent === $parent) {
+            // Root nodes are both the environments whose parent is null, and
+            // environments whose parent does not exist.
+            if ($environment->parent === $parent
+                || ($parent === null && !isset($environments[$environment->parent]))) {
                 $this->children[$environment->id] = $this->buildEnvironmentTree(
                     $environments,
                     $environment->id
@@ -94,7 +100,13 @@ class EnvironmentListCommand extends CommandBase
 
             $rows[] = $row;
             if (isset($this->children[$environment->id])) {
-                $rows = array_merge($rows, $this->buildEnvironmentRows($this->children[$environment->id], $indent, $indicateCurrent, $indentAmount + 1));
+                $childRows = $this->buildEnvironmentRows(
+                    $this->children[$environment->id],
+                    $indent,
+                    $indicateCurrent,
+                    $indentAmount + 1
+                );
+                $rows = array_merge($rows, $childRows);
             }
         }
 
@@ -135,22 +147,15 @@ class EnvironmentListCommand extends CommandBase
         $this->currentEnvironment = $this->getCurrentEnvironment($project);
 
         if (($currentProject = $this->getCurrentProject()) && $currentProject == $project) {
-            $projectConfig = $this->localProject->getProjectConfig($this->getProjectRoot());
+            /** @var \Platformsh\Cli\Local\LocalProject $localProject */
+            $localProject = $this->getService('local.project');
+            $projectConfig = $localProject->getProjectConfig($this->getProjectRoot());
             if (isset($projectConfig['mapping'])) {
                 $this->mapping = $projectConfig['mapping'];
             }
         }
 
         $tree = $this->buildEnvironmentTree($environments);
-
-        // Add orphaned environments (those whose parents do not exist) and
-        // their children to the tree.
-        foreach ($environments as $id => $environment) {
-            if (!isset($tree[$id]) && !empty($environment->parent) && !isset($environments[$environment->parent])) {
-                $tree[$id] = $environment;
-                $this->children[$id] = $this->buildEnvironmentTree($environments, $id);
-            }
-        }
 
         // To make the display nicer, we move all the children of master
         // to the top level.
@@ -161,7 +166,8 @@ class EnvironmentListCommand extends CommandBase
 
         $headers = ['ID', 'Name', 'Status'];
 
-        $table = new Table($input, $output);
+        /** @var \Platformsh\Cli\Service\Table $table */
+        $table = $this->getService('table');
 
         if ($table->formatIsMachineReadable()) {
             $table->render($this->buildEnvironmentRows($tree, false, false), $headers);
@@ -180,33 +186,40 @@ class EnvironmentListCommand extends CommandBase
         $this->stdErr->writeln("<info>*</info> - Indicates the current environment\n");
 
         $currentEnvironment = $this->currentEnvironment;
+        $executable = $this->config()->get('application.executable');
 
-        $this->stdErr->writeln("Check out a different environment by running <info>" . self::$config->get('application.executable') . " checkout [id]</info>");
+        $this->stdErr->writeln(
+            'Check out a different environment by running <info>' . $executable . ' checkout [id]</info>'
+        );
 
         if ($currentEnvironment->operationAvailable('branch')) {
             $this->stdErr->writeln(
-                "Branch a new environment by running <info>" . self::$config->get('application.executable') . " environment:branch [new-name]</info>"
+                'Branch a new environment by running <info>' . $executable . ' environment:branch [new-name]</info>'
             );
         }
         if ($currentEnvironment->operationAvailable('activate')) {
             $this->stdErr->writeln(
-                "Activate the current environment by running <info>" . self::$config->get('application.executable') . " environment:activate</info>"
+                'Activate the current environment by running <info>' . $executable . ' environment:activate</info>'
             );
         }
         if ($currentEnvironment->operationAvailable('delete')) {
-            $this->stdErr->writeln("Delete the current environment by running <info>" . self::$config->get('application.executable') . " environment:delete</info>");
+            $this->stdErr->writeln(
+                'Delete the current environment by running <info>' . $executable . ' environment:delete</info>'
+            );
         }
         if ($currentEnvironment->operationAvailable('backup')) {
             $this->stdErr->writeln(
-                "Make a snapshot of the current environment by running <info>" . self::$config->get('application.executable') . " snapshot:create</info>"
+                'Make a snapshot of the current environment by running <info>' . $executable . ' snapshot:create</info>'
             );
         }
         if ($currentEnvironment->operationAvailable('merge')) {
-            $this->stdErr->writeln("Merge the current environment by running <info>" . self::$config->get('application.executable') . " environment:merge</info>");
+            $this->stdErr->writeln(
+                'Merge the current environment by running <info>' . $executable . ' environment:merge</info>'
+            );
         }
         if ($currentEnvironment->operationAvailable('synchronize')) {
             $this->stdErr->writeln(
-                "Sync the current environment by running <info>" . self::$config->get('application.executable') . " environment:synchronize</info>"
+                'Sync the current environment by running <info>' . $executable . ' environment:synchronize</info>'
             );
         }
     }

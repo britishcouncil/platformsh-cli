@@ -5,6 +5,7 @@ use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Helper\GitHelper;
 use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Util\ActivityUtil;
+use Platformsh\Cli\Service\Ssh;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -31,6 +32,7 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
         $this->addProjectOption()
              ->addEnvironmentOption()
              ->addNoWaitOption("Do not wait for the environment to be branched");
+        Ssh::configureInput($this->getDefinition());
         $this->addExample('Create a new branch "sprint-2", based on "develop"', 'sprint-2 develop');
     }
 
@@ -42,13 +44,6 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
         $parentEnvironment = $this->getSelectedEnvironment();
 
         $branchName = $input->getArgument('id');
-
-        // Handle GitHub integration.
-        $ghRet = $this->ghExecute($input);
-        if ($ghRet !== FALSE) {
-          return $ghRet;
-        }
-
         if (empty($branchName)) {
             if ($input->isInteractive()) {
                 // List environments.
@@ -69,10 +64,11 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
         }
 
         if ($environment = $this->api()->getEnvironment($branchName, $selectedProject)) {
-            $checkout = $this->getHelper('question')
-                             ->confirm(
-                                 "The environment <comment>$branchName</comment> already exists. Check out?"
-                             );
+            /** @var \Platformsh\Cli\Service\QuestionHelper $questionHelper */
+            $questionHelper = $this->getService('question_helper');
+            $checkout = $questionHelper->confirm(
+                "The environment <comment>$branchName</comment> already exists. Check out?"
+            );
             if ($checkout) {
                 return $this->runOtherCommand(
                     'environment:checkout',
@@ -99,18 +95,22 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
         $projectRoot = $this->getProjectRoot();
         if (!$projectRoot && $force) {
             $this->stdErr->writeln(
-                "<comment>This command was run from outside your local project root, so the new " . self::$config->get('service.name') . " branch cannot be checked out in your local Git repository."
-                . " Make sure to run '" . self::$config->get('application.executable') . " checkout' or 'git checkout' in your local repository to switch to the branch you are expecting.</comment>"
+                "<comment>This command was run from outside your local project root, so the new " . $this->config()->get('service.name') . " branch cannot be checked out in your local Git repository."
+                . " Make sure to run '" . $this->config()->get('application.executable') . " checkout' or 'git checkout' in your local repository to switch to the branch you are expecting.</comment>"
             );
         } elseif (!$projectRoot) {
-            $this->stdErr->writeln("<error>You must run this command inside the project root, or specify --force.</error>");
+            $this->stdErr->writeln(
+                '<error>You must run this command inside the project root, or specify --force.</error>'
+            );
 
             return 1;
         }
 
-        $this->stdErr->writeln(
-            "Creating a new environment <info>$branchName</info>, branched from <info>{$parentEnvironment->title}</info>"
-        );
+        $this->stdErr->writeln(sprintf(
+            'Creating a new environment <info>%s</info>, branched from <info>%s</info>',
+            $branchName,
+            $parentEnvironment->title
+        ));
 
         $title = $input->getOption('title') ?: $branchName;
         $activity = $parentEnvironment->branch($title, $branchName);
@@ -118,15 +118,18 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
         // Clear the environments cache, as branching has started.
         $this->api()->clearEnvironmentsCache($selectedProject->id);
 
-        if ($projectRoot) {
-            $gitHelper = new GitHelper(new ShellHelper($this->stdErr));
-            $gitHelper->setDefaultRepositoryDir($projectRoot);
+        /** @var \Platformsh\Cli\Service\Git $git */
+        $git = $this->getService('git');
+        /** @var \Platformsh\Cli\Service\Ssh $ssh */
+        $ssh = $this->getService('ssh');
+        $git->setSshCommand($ssh->getSshCommand());
 
+        if ($projectRoot) {
             // If the Git branch already exists locally, just check it out.
-            $existsLocally = $gitHelper->branchExists($branchName);
+            $existsLocally = $git->branchExists($branchName, $projectRoot);
             if ($existsLocally) {
                 $this->stdErr->writeln("Checking out <info>$branchName</info> locally");
-                if (!$gitHelper->checkOut($branchName)) {
+                if (!$git->checkOut($branchName, $projectRoot)) {
                     $this->stdErr->writeln('<error>Failed to check out branch locally: ' . $branchName . '</error>');
                     if (!$force) {
                         return 1;
@@ -134,10 +137,10 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
                 }
             } else {
                 // Create a new branch, using the parent if it exists locally.
-                $parent = $gitHelper->branchExists($parentEnvironment->id) ? $parentEnvironment->id : null;
+                $parent = $git->branchExists($parentEnvironment->id, $projectRoot) ? $parentEnvironment->id : null;
                 $this->stdErr->writeln("Creating local branch <info>$branchName</info>");
 
-                if (!$gitHelper->checkOutNew($branchName, $parent)) {
+                if (!$git->checkOutNew($branchName, $parent, null, $projectRoot)) {
                     $this->stdErr->writeln('<error>Failed to create branch locally: ' . $branchName . '</error>');
                     if (!$force) {
                         return 1;
@@ -148,67 +151,25 @@ class EnvironmentBranchCommand extends ExtendedCommandBase
 
         $remoteSuccess = true;
         if (!$input->getOption('no-wait')) {
-            $remoteSuccess = ActivityUtil::waitAndLog(
+            /** @var \Platformsh\Cli\Service\ActivityMonitor $activityMonitor */
+            $activityMonitor = $this->getService('activity_monitor');
+            $remoteSuccess = $activityMonitor->waitAndLog(
                 $activity,
-                $this->stdErr,
                 "The environment <info>$branchName</info> has been created.",
                 '<error>Branching failed</error>'
             );
 
+            // Set the local branch to track the remote branch. This requires
+            // first fetching the new branch from the remote.
             if ($remoteSuccess && $projectRoot) {
-                // Determine the correct upstream for the new branch. If there is an
-                // 'origin' remote, then it has priority.
-                $upstreamRemote = self::$config->get('detection.git_remote_name');
-                $originRemoteUrl = $gitHelper->getConfig('remote.origin.url');
-                if ($originRemoteUrl !== $selectedProject->getGitUrl(false) && $gitHelper->remoteBranchExists('origin', $branchName)) {
-                    $upstreamRemote = 'origin';
-                }
-
-                // Fetch the branch from the upstream remote.
-                $gitHelper->fetch($upstreamRemote, $branchName);
-
-                $upstream = $upstreamRemote . '/' . $branchName;
-
-                $gitHelper->setUpstream($upstream);
+                $upstreamRemote = $this->config()->get('detection.git_remote_name');
+                $git->fetch($upstreamRemote, $branchName, $projectRoot);
+                $git->setUpstream($upstreamRemote . '/' . $branchName, $branchName, $projectRoot);
             }
         }
 
         $this->api()->clearEnvironmentsCache($this->getSelectedProject()->id);
 
         return $remoteSuccess ? 0 : 1;
-    }
-
-    /**
-     * Additional GitHub integration steps to run on execute().
-     * @param $input
-     */
-    private function ghExecute(InputInterface $input) {
-      // If GitHub integration has become available but it's not yet enabled locally.
-      if ($this->gitHubIntegrationAvailable() && !$this->gitHubIntegrationEnabled()) {
-        $this->enableGitHubIntegration();
-      }
-
-      // If GitHub integration has become unavailable but it's still enabled locally.
-      if ($this->gitHubIntegrationEnabled() && !$this->gitHubIntegrationAvailable()) {
-        $this->disableGitHubIntegration();
-      }
-
-      // If GitHub integration is enabled locally and still available.
-      if ($this->gitHubIntegrationEnabled() && $this->gitHubIntegrationAvailable()) {
-        $git = new GitHelper(new ShellHelper($this->stdErr));
-        $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
-        $git->ensureInstalled();
-        $git->execute(['fetch'], $this->extCurrentProject['repository_dir']);
-        $branch = $input->getArgument('id');
-        if (empty($branch)) {
-          $this->stdErr->writeln("<error>You must specify the name of the new branch.</error>");
-          return 1;
-        }
-        $git->checkOutNew($branch, $this->getSelectedEnvironment(), $this->extCurrentProject['repository_dir']);
-        $git->execute(['push', '-u', 'origin', $branch], $this->extCurrentProject['repository_dir']);
-        return 0;
-      }
-
-      return FALSE;
     }
 }

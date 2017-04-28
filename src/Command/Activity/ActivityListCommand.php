@@ -3,8 +3,8 @@ namespace Platformsh\Cli\Command\Activity;
 
 use Platformsh\Cli\Command\CommandBase;
 use Platformsh\Cli\Console\AdaptiveTableCell;
-use Platformsh\Cli\Util\ActivityUtil;
-use Platformsh\Cli\Util\Table;
+use Platformsh\Cli\Service\ActivityMonitor;
+use Platformsh\Cli\Service\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -20,11 +20,11 @@ class ActivityListCommand extends CommandBase
             ->setName('activity:list')
             ->setAliases(['activities'])
             ->addOption('type', null, InputOption::VALUE_REQUIRED, 'Filter activities by type')
-            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Limit the number of results displayed', 5)
+            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Limit the number of results displayed', 10)
             ->addOption('start', null, InputOption::VALUE_REQUIRED, 'Only activities created before this date will be listed')
             ->addOption('all', 'a', InputOption::VALUE_NONE, 'Check activities on all environments')
             ->setDescription('Get a list of activities for an environment or project');
-        Table::addFormatOption($this->getDefinition());
+        Table::configureInput($this->getDefinition());
         $this->addProjectOption()
              ->addEnvironmentOption();
         $this->addExample('List recent activities for the current environment')
@@ -51,18 +51,19 @@ class ActivityListCommand extends CommandBase
             $environmentSpecific = true;
             $environment = $this->getSelectedEnvironment();
             $activities = $environment->getActivities($limit, $input->getOption('type'), $startsAt);
-        }
-        else {
+        } else {
             $environmentSpecific = false;
             $activities = $project->getActivities($limit, $input->getOption('type'), $startsAt);
         }
+        /** @var \Platformsh\Client\Model\Activity[] $activities */
         if (!$activities) {
             $this->stdErr->writeln('No activities found');
 
             return 1;
         }
 
-        $table = new Table($input, $output);
+        /** @var \Platformsh\Cli\Service\Table $table */
+        $table = $this->getService('table');
 
         $rows = [];
         foreach ($activities as $activity) {
@@ -70,8 +71,9 @@ class ActivityListCommand extends CommandBase
                 new AdaptiveTableCell($activity->id, ['wrap' => false]),
                 date('Y-m-d H:i:s', strtotime($activity['created_at'])),
                 $activity->getDescription(),
-                $activity->getCompletionPercent(),
-                ActivityUtil::formatState($activity->state),
+                $activity->getCompletionPercent() . '%',
+                ActivityMonitor::formatState($activity->state),
+                ActivityMonitor::formatResult($activity->result, !$table->formatIsMachineReadable()),
             ];
             if (!$environmentSpecific) {
                 $row[] = implode(', ', $activity->environments);
@@ -79,7 +81,7 @@ class ActivityListCommand extends CommandBase
             $rows[] = $row;
         }
 
-        $headers = ['ID', 'Created', 'Description', '% Complete', 'State'];
+        $headers = ['ID', 'Created', 'Description', 'Progress', 'State', 'Result'];
 
         if (!$environmentSpecific) {
             $headers[] = 'Environment(s)';
@@ -87,16 +89,34 @@ class ActivityListCommand extends CommandBase
 
         if (!$table->formatIsMachineReadable()) {
             if ($environmentSpecific && isset($environment)) {
-                $this->stdErr->writeln("Activities for the environment <info>" . $environment->id . "</info>");
-            }
-            elseif (!$environmentSpecific) {
-                $this->stdErr->writeln("Activities for the project <info>" . $project->id . "</info>");
+                $this->stdErr->writeln(
+                    sprintf(
+                        'Activities for the environment <info>%s</info>:',
+                        $environment->id
+                    )
+                );
+            } elseif (!$environmentSpecific) {
+                $this->stdErr->writeln(
+                    sprintf(
+                        'Activities for the project <info>%s</info>:',
+                        $project->id
+                    )
+                );
             }
         }
 
         $table->render($rows, $headers);
 
+        if (!$table->formatIsMachineReadable()) {
+            $this->stdErr->writeln('');
+            $this->stdErr->writeln(
+                sprintf(
+                    'To view the log for an activity, run: <info>%s activity:log [id]</info>',
+                    $this->config()->get('application.executable')
+                )
+            );
+        }
+
         return 0;
     }
-
 }

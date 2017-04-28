@@ -51,8 +51,7 @@ class ActivityLogCommand extends CommandBase
             if ($this->hasSelectedEnvironment() && !$input->getOption('all')) {
                 $activities = $this->getSelectedEnvironment()
                     ->getActivities(1, $input->getOption('type'));
-            }
-            else {
+            } else {
                 $activities = $this->getSelectedProject()
                     ->getActivities(1, $input->getOption('type'));
             }
@@ -70,7 +69,7 @@ class ActivityLogCommand extends CommandBase
         );
 
         $refresh = $input->getOption('refresh');
-        if ($refresh > 0 && !$this->runningViaMulti && $this->isTerminal($output) && !$activity->isComplete()) {
+        if ($refresh > 0 && !$this->runningViaMulti && $output->isDecorated() && !$activity->isComplete()) {
             $activity->wait(
                 null,
                 function ($log) use ($output) {
@@ -83,12 +82,10 @@ class ActivityLogCommand extends CommandBase
             // the project's environments, so this is a good opportunity to
             // clear the cache.
             $this->api()->clearEnvironmentsCache($activity->project);
-        }
-        else {
+        } else {
             $output->write($activity->log);
         }
 
         return 0;
     }
-
 }

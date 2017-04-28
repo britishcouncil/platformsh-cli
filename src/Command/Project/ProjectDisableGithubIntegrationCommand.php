@@ -20,7 +20,7 @@ class ProjectDisableGithubIntegrationCommand extends ExtendedCommandBase {
     $this->validateInput($input);
     $project = $this->getSelectedProject();
 
-    $qh = $this->getHelper('question');
+    $qh = $this->getService('question_helper');
     if ($qh->confirm("Are you sure you want to disable GitHub integration for <info>$project->id</info>?", $input, $this->stdErr, FALSE)) {
       $this->disableGitHubIntegration();
     }
