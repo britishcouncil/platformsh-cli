@@ -5,7 +5,6 @@ namespace Platformsh\Cli\Command\Environment;
 use Platformsh\Cli\Command\CommandBase;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class EnvironmentEradicateCommand extends CommandBase {
@@ -15,7 +14,7 @@ class EnvironmentEradicateCommand extends CommandBase {
          ->setDescription('Delete an environment and the related branch without asking for confirmation')
          ->addArgument('url', InputArgument::IS_ARRAY, 'The URL of the environment to delete');
     $this->addExample('Delete the environments "test1" from project "refsklfzrwbvg"', 'http://test1-refsklfzrwbvg.bc.platform.sh/')
-         ->addExample('Delete the environments "test3" from project "refsklfzrwbvg"', 'https://test3-refsklfzrwbvg.bc.platform.sh/');
+         ->addExample('Delete the environments "test3" from project "vetsk3f5ravsg"', 'https://test3-vetsk3f5ravsg.bc.platform.sh/');
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {
