@@ -6,13 +6,12 @@ use Drush\Make\Parser\ParserIni;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Platformsh\Cli\Command\ExtendedCommandBase;
-use Platformsh\Cli\Helper\GitHelper;
-use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
+use Platformsh\Cli\Service\Shell;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 class DrupalDeployCommand extends ExtendedCommandBase {
@@ -21,7 +20,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->setName('drupal:deploy')
          ->setAliases(array('deploy'))
          ->setDescription('Deploy a Drupal Site locally')
-         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build')
          ->addOption('db-sync', 'd', InputOption::VALUE_NONE, "Sync project's database with the daily live backup.")
          ->addOption('core-branch', 'c', InputOption::VALUE_REQUIRED, "The core profile's branch to use during deployment")
          ->addOption('environment', 'e', InputOption::VALUE_OPTIONAL, "The environment ID to clone. Defaults to local:deploy:git_default_branch's value in the config.yaml")
@@ -31,12 +29,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
          ->addOption('no-reindex', 'I', InputOption::VALUE_NONE, 'Do not reindex the content after creating indices for the first time during deployment.')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.')
          ->addOption('no-unclean-features', 'U', InputOption::VALUE_NONE, 'Shows a list of unclean features (if any) at the end of the deployment.');
+    $this->addAppOption();
+    $this->addProjectOption();
     $this->addExample('Deploy Drupal project', '-p myproject123')
          ->addExample('Deploy Drupal project refreshing the database from the backup', '-d -p myproject123')
          ->addExample('Deploy Drupal project rereshing the database from the backup but skipping sanitization', '-d -S -p myproject123');
-    $this->addProjectOption();
   }
-
 
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
@@ -73,7 +71,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->setProjectRoot($this->extCurrentProject['root_dir']);
 
     // Set more info about the current project.
-    $this->extCurrentProject['legacy'] = $this->localProject->getLegacyProjectRoot() !== FALSE;
+    $this->extCurrentProject['legacy'] = $this->getService('local.project')->getLegacyProjectRoot() !== FALSE;
     $this->extCurrentProject['repository_dir'] = $this->extCurrentProject['legacy'] ?
       $this->extCurrentProject['root_dir'] . '/repository' :
       $this->extCurrentProject['root_dir'];
@@ -83,9 +81,9 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $apps = $input->getOption('app');
 
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), self::$config) as $app) {
-
-      if ($apps && !in_array($app->getId(), $apps)) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config()) as $app) {
+      // If --app was specified, only allow those apps.
+      if (!empty($apps) && !in_array($app->getId(), $apps)) {
         continue;
       }
 
@@ -110,7 +108,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         }
         // If we are not to fetch from a remote core branch.
         else {
-          if (is_array($profile) && !empty($profileJustFetched[$profile['name']])) {
+          if (is_array($profile) && empty($profileJustFetched[$profile['name']])) {
             $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
             // We only need to do this once for the project, not for every app;
             // in case more than one app uses the same profile.
@@ -134,7 +132,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       // DB import.
       if ($input->getOption('db-sync')) {
         $this->runOtherCommand('drupal:db-sync', [
-          '--environment' => self::$config->get('local.deploy.remote_environment'),
+          '--environment' => $this->config()->get('local.deploy.remote_environment'),
           '--no-sanitize' => TRUE,
           '--app' => [$app->getId()],
           'directory' => $this->extCurrentProject['root_dir'],
@@ -165,7 +163,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
       // Mount remote file share.
       $this->runOtherCommand('drupal:mount-files', [
-        '--environment' => self::$config->get('local.deploy.remote_environment'),
+        '--environment' => $this->config()->get('local.deploy.remote_environment'),
         '--app' => [$app->getId()],
         'directory' => $this->extCurrentProject['root_dir'],
       ]);
@@ -183,7 +181,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $this->cleanBuilds();
 
       // End of deployment.
-      $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . self::$config->get('local.deploy.local_domain') . "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
+      $this->stdErr->writeln("<info>[*]</info> Deployment finished.\n\tGo to <info>http://" . $this->extCurrentProject['internal_site_code'] . $this->config()->get('local.deploy.local_domain') . "</info> to view the site.\n\tThe password for all users is <info>password</info>.");
 
       if ($input->getOption('core-branch')) {
         $this->stdErr->writeln("\n<info>NOTE:</info> The distro profile has not been symlinked because you have deployed using <info>[-c | --core-branch]</info>.");
@@ -200,8 +198,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $coreBranch
    */
   private function build(LocalApplication $app, Project $project, $profile, $noArchive, $coreBranch = NULL) {
-    $this->stdErr->writeln('<info>[*]</info> Building <info>' . $project->getProperty('title') . '</info> (' . $project->id . ')...');
-
     // This step is not required for projects that do not
     // use external distro profiles.
     if (is_array($profile)) {
@@ -223,6 +219,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Build.
     $localBuildOptions['--yes'] = TRUE;
     $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
+    $localBuildOptions['--no-build-hooks'] = TRUE;
+    $localBuildOptions['--no-deps'] = TRUE;
     $localBuildOptions['app'] = [$app->getId()];
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
@@ -231,9 +229,9 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     // Make sure settings.local.php is up to date for the project.
     $slugifiedProjectTitle = $this->getSlug($project, $app);
-    $settings_local_php = sprintf($this->localSettingsFile(), self::$config->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, self::$config->get('local.stack.mysql_user'), self::$config->get('local.stack.mysql_password'), self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_port'));
+    $settings_local_php = sprintf($this->localSettingsFile(), $this->config()->get('local.stack.mysql_db_prefix') . $slugifiedProjectTitle, $this->config()->get('local.stack.mysql_user'), $this->config()->get('local.stack.mysql_password'), $this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_port'));
     // Account for Legacy projects CLI < 3.x
-    if (!($sharedPath = $this->localProject->getLegacyProjectRoot())) {
+    if (!($sharedPath = $this->getService('local.project')->getLegacyProjectRoot())) {
       $sharedPath = $this->getProjectRoot() . '/.platform/local';
     }
     file_put_contents($sharedPath . "/shared/" . $app->getId() . "/settings.local.php", $settings_local_php);
@@ -272,14 +270,14 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    */
   private function fetchProfile($profile) {
     /** @var $git GitHelper */
-    $git = $this->getHelper('git');
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Checking out <info>" . $profile['name'] . "</info> for the first time...");
 
     $git->cloneRepo($profile['url'], $this->profilesRootDir . "/" . $profile['name'], array(
       '--branch',
       isset($profile['branch']) ? $profile['branch'] :
-        self::$config->get('local.deploy.git_default_branch'),
+        $this->config()->get('local.deploy.git_default_branch'),
     ));
 
     if (isset($profile['tag'])) {
@@ -296,13 +294,13 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->stdErr->writeln("<info>[*]</info> Fetching <info>" . $project->getProperty('title') . "</info> (" . $project->id . ") for the first time...");
     $this->runOtherCommand('project:get', [
       '--yes' => TRUE,
-      '--environment' => self::$config->get('local.deploy.git_default_branch'),
-      'id' => $project->id,
+      '--environment' => $this->config()->get('local.deploy.git_default_branch'),
+      'project' => $project->id,
       'directory' => $this->extCurrentProject['root_dir'],
     ]);
     if (!empty($env)) {
       /** @var $git GitHelper */
-      $git = $this->getHelper('git');
+      $git = $this->getService('git');
       $git->ensureInstalled();
       $git->execute(array('reset', '--hard'), $this->extCurrentProject['root_dir']);
       chdir($this->extCurrentProject['root_dir']);
@@ -329,19 +327,20 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @throws \Exception
    */
   private function updateRepository($dir, $branch = NULL) {
-    /** @var $git GitHelper */
-    $git = $this->getHelper('git');
+    /** @var \Platformsh\Cli\Service\Git $git */
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($dir);
-    $this->stdErr->write(sprintf("<info>[*]</info> Updating <info>%s/%s</info>...", basename(str_ireplace(':', '/', $git->getConfig('remote.origin.url')), '.git'), $git->getCurrentBranch()));
-    if ($branch) {
+    $remote = $git->getConfig('remote.origin.url') ?: $git->getConfig('remote.platform.url');
+    $this->stdErr->write(sprintf("<info>[*]</info> Updating <info>%s/%s</info>...", basename(str_ireplace(':', '/', $remote), '.git'), $git->getCurrentBranch()));
+    if (!empty($branch)) {
       $git->checkOut($branch, $dir);
     }
     $git->execute(array('pull'));
     $git->execute(array(
       'pull',
       'origin',
-      self::$config->get('local.deploy.git_default_branch'),
+      $this->config()->get('local.deploy.git_default_branch'),
     ));
     $this->stdErr->writeln("\t<info>[ok]</info>");
   }
@@ -355,7 +354,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
 
-    $sh = new ShellHelper();
+    $sh = new Shell();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
       if ($hook != "cd " . $app->getDocumentRoot()) {
         if (strlen($hook) > 0) {
@@ -464,12 +463,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    */
   private function createElasticSearchIndices(Project $project, LocalApplication $app) {
     $slugifiedTitle = $this->getSlug($project, $app);
-    $dbName = self::$config->get('local.stack.mysql_db_prefix') . $slugifiedTitle;
-    $elasticSearchBaseUrl = 'http://' . self::$config->get('local.stack.elasticsearch_host') . ":" . self::$config->get('local.stack.elasticsearch_port') . '/';
+    $dbName = $this->config()->get('local.stack.mysql_db_prefix') . $slugifiedTitle;
+    $elasticSearchBaseUrl = 'http://' . $this->config()->get('local.stack.elasticsearch_host') . ":" . $this->config()->get('local.stack.elasticsearch_port') . '/';
 
     // Use PHP MySQL APIs for these simple queries.
     $query = "SELECT sai.machine_name FROM search_api_index sai INNER JOIN search_api_server sas ON sai.server = sas.machine_name WHERE sas.class = 'search_api_elasticsearch_elastica_service'";
-    if ($connection = mysqli_connect(self::$config->get('local.stack.mysql_host'), self::$config->get('local.stack.mysql_root_user'), self::$config->get('local.stack.mysql_root_password'))) {
+    if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), $this->config()->get('local.stack.mysql_root_password'))) {
       mysqli_select_db($connection, $dbName);
       $r = mysqli_query($connection, $query);
     }

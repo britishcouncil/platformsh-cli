@@ -2,6 +2,7 @@
 namespace Platformsh\Cli\Command\Tunnel;
 
 use Platformsh\Cli\Command\CommandBase;
+use Platformsh\Cli\Util\OsUtil;
 use Platformsh\Cli\Util\PortUtil;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -40,7 +41,10 @@ abstract class TunnelCommandBase extends CommandBase
         foreach ($this->getTunnelInfo() as $info) {
             if ($this->tunnelsAreEqual($tunnel, $info)) {
                 if (isset($info['pid']) && function_exists('posix_kill') && !posix_kill($info['pid'], 0)) {
-                    $this->debug(sprintf('The tunnel at port %d is no longer open, removing from list', $info['localPort']));
+                    $this->debug(sprintf(
+                        'The tunnel at port %d is no longer open, removing from list',
+                        $info['localPort']
+                    ));
                     $this->closeTunnel($info);
                     continue;
                 }
@@ -63,10 +67,10 @@ abstract class TunnelCommandBase extends CommandBase
     {
         if (!isset($this->tunnelInfo)) {
             $this->tunnelInfo = [];
-            $filename = self::$config->getUserConfigDir() . '/tunnel-info.json';
+            $filename = $this->config()->getUserConfigDir() . '/tunnel-info.json';
             if (file_exists($filename)) {
                 $this->debug(sprintf('Loading tunnel info from %s', $filename));
-                $this->tunnelInfo = (array) json_decode(file_get_contents($filename), TRUE);
+                $this->tunnelInfo = (array) json_decode(file_get_contents($filename), true);
             }
         }
 
@@ -74,7 +78,10 @@ abstract class TunnelCommandBase extends CommandBase
             $needsSave = false;
             foreach ($this->tunnelInfo as $key => $tunnel) {
                 if (isset($tunnel['pid']) && function_exists('posix_kill') && !posix_kill($tunnel['pid'], 0)) {
-                    $this->debug(sprintf('The tunnel at port %d is no longer open, removing from list', $tunnel['localPort']));
+                    $this->debug(sprintf(
+                        'The tunnel at port %d is no longer open, removing from list',
+                        $tunnel['localPort']
+                    ));
                     unset($this->tunnelInfo[$key]);
                     $needsSave = true;
                 }
@@ -89,14 +96,13 @@ abstract class TunnelCommandBase extends CommandBase
 
     protected function saveTunnelInfo()
     {
-        $filename = self::$config->getUserConfigDir() . '/tunnel-info.json';
+        $filename = $this->config()->getUserConfigDir() . '/tunnel-info.json';
         if (!empty($this->tunnelInfo)) {
             $this->debug('Saving tunnel info to: ' . $filename);
             if (!file_put_contents($filename, json_encode($this->tunnelInfo))) {
                 throw new \RuntimeException('Failed to write tunnel info to: ' . $filename);
             }
-        }
-        else {
+        } else {
             unlink($filename);
         }
     }
@@ -115,7 +121,11 @@ abstract class TunnelCommandBase extends CommandBase
         if (isset($tunnel['pid']) && function_exists('posix_kill')) {
             $success = posix_kill($tunnel['pid'], SIGTERM);
             if (!$success) {
-                $this->stdErr->writeln(sprintf('Failed to kill process <error>%d</error> (POSIX error %s)', $tunnel['pid'], posix_get_last_error()));
+                $this->stdErr->writeln(sprintf(
+                    'Failed to kill process <error>%d</error> (POSIX error %s)',
+                    $tunnel['pid'],
+                    posix_get_last_error()
+                ));
             }
         }
         $pidFile = $this->getPidFile($tunnel);
@@ -197,7 +207,7 @@ abstract class TunnelCommandBase extends CommandBase
     protected function getPidFile(array $tunnel)
     {
         $key = $this->getTunnelKey($tunnel);
-        $dir = self::$config->getUserConfigDir() . '/.tunnels';
+        $dir = $this->config()->getUserConfigDir() . '/.tunnels';
         if (!is_dir($dir) && !mkdir($dir, 0700, true)) {
             throw new \RuntimeException('Failed to create directory: ' . $dir);
         }
@@ -217,7 +227,7 @@ abstract class TunnelCommandBase extends CommandBase
     protected function createTunnelProcess($url, $remoteHost, $remotePort, $localPort, array $extraArgs = [])
     {
         $args = ['ssh', '-n', '-N', '-L', implode(':', [$localPort, $remoteHost, $remotePort]), $url];
-        if (strpos(PHP_OS, 'WIN') === false) {
+        if (!OsUtil::isWindows()) {
             array_unshift($args, 'exec');
         }
         $args = array_merge($args, $extraArgs);
@@ -263,7 +273,8 @@ abstract class TunnelCommandBase extends CommandBase
      *
      * @return string
      */
-    protected function formatTunnelRelationship(array $tunnel) {
+    protected function formatTunnelRelationship(array $tunnel)
+    {
         return $tunnel['serviceKey'] > 0
             ? sprintf('%s.%d', $tunnel['relationship'], $tunnel['serviceKey'])
             : $tunnel['relationship'];

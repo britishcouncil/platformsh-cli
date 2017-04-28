@@ -85,8 +85,13 @@ auth
   auth:info                                 Display your account information
   auth:login (login)                        Log in to Platform.sh
   auth:logout (logout)                      Log out of Platform.sh
+certificate
+  certificate:add                           Add an SSL certificate to the project
+  certificate:delete                        Delete a certificate from the project
+  certificate:get                           View a certificate
+  certificate:list (certificates)           List project certificates
 db
-  db:dump (sql-dump)                        Create a local dump of the remote database
+  db:dump                                   Create a local dump of the remote database
   db:size                                   Estimate the disk usage of a database
   db:sql (sql)                              Run SQL on the remote database
 domain
@@ -106,8 +111,8 @@ environment
   environment:list (environments)           Get a list of environments
   environment:logs (log)                    Read an environment's logs
   environment:merge (merge)                 Merge an environment
+  environment:push (push)                   Push code to an environment
   environment:relationships (relationships)   Show an environment's relationships
-  environment:routes (routes)               List an environment's routes
   environment:ssh (ssh)                     SSH to the current environment
   environment:synchronize (sync)            Synchronize an environment's code and/or data from its parent
   environment:url (url)                     Get the public URLs of an environment
@@ -126,11 +131,23 @@ project
   project:get (get)                         Clone a project locally
   project:info                              Read or set properties for a project
   project:list (projects)                   Get a list of all active projects
+  project:set-remote                        Set the remote project for the current Git repository
+  project:variable:delete                   Delete a variable from a project
+  project:variable:get (project-variables, pvget)   View variable(s) for a project
+  project:variable:set (pvset)              Set a variable for a project
+route
+  route:get                                 View a route
+  route:list (routes)                       List all routes for an environment
 self
   self:install                              Install or update CLI configuration files
   self:update (self-update)                 Update the CLI to the latest version
+server
+  server:list (servers)                     List running local project web server(s)
+  server:run                                Run a local PHP web server
+  server:start                              Run PHP web server(s) for the local project
+  server:stop                               Stop local project web server(s)
 snapshot
-  snapshot:create (backup)                  Make a snapshot of an environment
+  snapshot:create                           Make a snapshot of an environment
   snapshot:list (snapshots)                 List available snapshots of an environment
   snapshot:restore                          Restore an environment snapshot
 ssh-key
@@ -191,6 +208,7 @@ Other customization is available via environment variables:
 * `PLATFORMSH_CLI_DEBUG`: set to 1 to enable cURL debugging
 * `PLATFORMSH_CLI_DISABLE_CACHE`: set to 1 to disable caching
 * `PLATFORMSH_CLI_SESSION_ID`: change user session (default 'default')
+* `PLATFORMSH_CLI_UPDATES_CHECK`: set to 0 to disable the automatic updates check
 * `http_proxy` or `https_proxy`: specify a proxy for connecting to Platform.sh
 
 ## Contributing

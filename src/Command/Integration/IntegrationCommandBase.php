@@ -2,8 +2,6 @@
 namespace Platformsh\Cli\Command\Integration;
 
 use Platformsh\Cli\Command\CommandBase;
-use Platformsh\Cli\Util\PropertyFormatter;
-use Platformsh\Cli\Util\Table;
 use Platformsh\Client\Model\Integration;
 use Platformsh\ConsoleForm\Field\ArrayField;
 use Platformsh\ConsoleForm\Field\BooleanField;
@@ -11,22 +9,11 @@ use Platformsh\ConsoleForm\Field\Field;
 use Platformsh\ConsoleForm\Field\OptionsField;
 use Platformsh\ConsoleForm\Field\UrlField;
 use Platformsh\ConsoleForm\Form;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
 
 abstract class IntegrationCommandBase extends CommandBase
 {
     /** @var Form */
     private $form;
-
-    /** @var PropertyFormatter */
-    protected $propertyFormatter;
-
-    public function __construct($name = null)
-    {
-        parent::__construct($name);
-        $this->propertyFormatter = new PropertyFormatter();
-    }
 
     /**
      * @return Form
@@ -100,7 +87,7 @@ abstract class IntegrationCommandBase extends CommandBase
                     'hipchat',
                 ]],
                 'validator' => 'is_numeric',
-                'name' => 'HipChat room ID',
+                'optionName' => 'room',
             ]),
             'url' => new UrlField('URL', [
                 'conditions' => ['type' => [
@@ -115,15 +102,16 @@ abstract class IntegrationCommandBase extends CommandBase
                 ]],
                 'default' => ['*'],
                 'description' => 'Events to report, e.g. environment.push',
+                'optionName' => 'events',
             ]),
             'states' => new ArrayField('States to report', [
                 'conditions' => ['type' => [
                     'hipchat',
                     'webhook',
                 ]],
-                'name' => 'States to report',
                 'default' => ['complete'],
                 'description' => 'States to report, e.g. pending, in_progress, complete',
+                'optionName' => 'states',
             ]),
             'environments' => new ArrayField('Environments', [
                 'conditions' => ['type' => [
@@ -137,22 +125,22 @@ abstract class IntegrationCommandBase extends CommandBase
 
     /**
      * @param Integration     $integration
-     * @param InputInterface  $input
-     * @param OutputInterface $output
      */
-    protected function displayIntegration(Integration $integration, InputInterface $input, OutputInterface $output)
+    protected function displayIntegration(Integration $integration)
     {
-        $table = new Table($input, $output);
+        /** @var \Platformsh\Cli\Service\Table $table */
+        $table = $this->getService('table');
+        /** @var \Platformsh\Cli\Service\PropertyFormatter $formatter */
+        $formatter = $this->getService('property_formatter');
 
         $info = [];
         foreach ($integration->getProperties() as $property => $value) {
-            $info[$property] = $this->propertyFormatter->format($value, $property);
+            $info[$property] = $formatter->format($value, $property);
         }
         if ($integration->hasLink('#hook')) {
-            $info['hook_url'] = $this->propertyFormatter->format($integration->getLink('#hook'));
+            $info['hook_url'] = $formatter->format($integration->getLink('#hook'));
         }
 
         $table->renderSimple(array_values($info), array_keys($info));
     }
-
 }
