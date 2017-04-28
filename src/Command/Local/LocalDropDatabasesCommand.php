@@ -24,7 +24,7 @@ class LocalDropDatabasesCommand extends CommandBase {
           $this->stdErr->writeln("* <info>$db[0]</info>");
         }
 
-        $qh = $this->getHelper('question');
+        $qh = $this->getService('question_helper');
         if ($qh->confirm("Are you sure you want to delete all databases listed above?", $input, $this->stdErr, FALSE)) {
           foreach ($databases as $db) {
             $this->stdErr->writeln("Dropping <info>$db[0]</info>...");
