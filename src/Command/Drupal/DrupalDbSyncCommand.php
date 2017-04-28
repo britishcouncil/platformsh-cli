@@ -8,6 +8,7 @@ use Platformsh\Cli\Service\Shell;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Tests\Fixtures\DummyOutput;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -17,12 +18,14 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $this->setName('drupal:db-sync')
          ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
-         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to import the database for.')
-         ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.');
+         ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.')
+         ->addOption('no-cache', 'C', InputOption::VALUE_NONE, 'Fetch a fresh copy of the database.')
+         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build');
     $this->addDirectoryArgument();
     $this->addEnvironmentOption();
     $this->addExample('Synchronize database of a Drupal project from daily backup', '-e environmentID /path/to/project')
-         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '--no-sanitize -e environmentID /path/to/project');
+         ->addExample('Synchronize database of a Drupal project from daily backup; do not sanitize it', '--no-sanitize -e environmentID /path/to/project')
+         ->addExample('Synchronize database of a Drupal project from daily backup; do not use the local cached copy from previous syncs', '--no-cache -e environmentID /path/to/project');
   }
 
   protected function execute(InputInterface $input, OutputInterface $output) {
@@ -47,14 +50,13 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     $project = $this->getSelectedProject();
     $envId = $input->getOption('environment');
     $slugifiedTitle = $this->getSlug($project, $app);
-    $backupPath = $this->config()->get('local.deploy.db_backup_local_cache') . "/" . date('Y-m-d') . '_' . $slugifiedTitle . '.sql';
+    $backupPath = $this->config()->get('local.deploy.db_backup_local_cache') .
+      "/" . date('Y-m-d') . '_' . $slugifiedTitle . '.sql';
 
-    $this->stdErr->writeln(sprintf("Importing database from <info>%s<info>", $project->id . '-' . $app->getId() .  '-' . $envId));
+    $this->stdErr->writeln(sprintf("Importing database from <info>%s</info>", $project->id . '-' . $envId .  '--' . $app->getId()));
 
     // Get a fresh SQL dump if necessary.
-    if (!file_exists($backupPath)) {
-      $this->stdErr->writeln("Downloading backup to: <info>$backupPath</info>");
-
+    if (!file_exists($backupPath) || $input->getOption('no-cache')) {
       // SCP and GUNZIP compressed database backup.
       $sh = new Shell();
       $sh->execute([
@@ -64,18 +66,18 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       ]);
       $sh->execute(['gunzip', "$backupPath.gz"]);
 
-      // If the the above didn't work, use sql-dump command.
+      // If the above didn't work, use sql-dump command.
       if (!file_exists($backupPath)) {
         $this->runOtherCommand('db:dump', [
           '--project' => $project->id,
           '--environment' => $envId,
           '--app' => $app->getId(),
           '--file' => $backupPath
-        ]);
+        ], new DummyOutput());
       }
     }
     else {
-      $this->stdErr->writeln("Retrieving backup from the cache: <info>$backupPath</info>");
+      $this->stdErr->writeln("(Retrieving backup from local cache. You can use <info>--no-cache</info> to download a fresh copy instead)");
     }
 
     // If dump is present and sound.
