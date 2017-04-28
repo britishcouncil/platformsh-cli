@@ -6,9 +6,8 @@ use Drush\Make\Parser\ParserIni;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Platformsh\Cli\Command\ExtendedCommandBase;
-use Platformsh\Cli\Helper\GitHelper;
-use Platformsh\Cli\Helper\ShellHelper;
 use Platformsh\Cli\Local\LocalApplication;
+use Platformsh\Cli\Service\Shell;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -21,7 +20,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     $this->setName('drupal:deploy')
          ->setAliases(array('deploy'))
          ->setDescription('Deploy a Drupal Site locally')
-         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build')
          ->addOption('db-sync', 'd', InputOption::VALUE_NONE, "Sync project's database with the daily live backup.")
          ->addOption('core-branch', 'c', InputOption::VALUE_REQUIRED, "The core profile's branch to use during deployment")
          ->addOption('environment', 'e', InputOption::VALUE_OPTIONAL, "The environment ID to clone. Defaults to local:deploy:git_default_branch's value in the config.yaml")
@@ -31,12 +29,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
          ->addOption('no-reindex', 'I', InputOption::VALUE_NONE, 'Do not reindex the content after creating indices for the first time during deployment.')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.')
          ->addOption('no-unclean-features', 'U', InputOption::VALUE_NONE, 'Shows a list of unclean features (if any) at the end of the deployment.');
+    $this->addAppOption();
+    $this->addProjectOption();
     $this->addExample('Deploy Drupal project', '-p myproject123')
          ->addExample('Deploy Drupal project refreshing the database from the backup', '-d -p myproject123')
          ->addExample('Deploy Drupal project rereshing the database from the backup but skipping sanitization', '-d -S -p myproject123');
-    $this->addProjectOption();
   }
-
 
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
@@ -83,9 +81,9 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $apps = $input->getOption('app');
 
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
-
-      if ($apps && !in_array($app->getId(), $apps)) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config()) as $app) {
+      // If --app was specified, only allow those apps.
+      if (!empty($apps) && !in_array($app->getId(), $apps)) {
         continue;
       }
 
@@ -110,7 +108,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         }
         // If we are not to fetch from a remote core branch.
         else {
-          if (is_array($profile) && !empty($profileJustFetched[$profile['name']])) {
+          if (is_array($profile) && empty($profileJustFetched[$profile['name']])) {
             $this->updateRepository($this->profilesRootDir . "/" . $profile['name']);
             // We only need to do this once for the project, not for every app;
             // in case more than one app uses the same profile.
@@ -200,8 +198,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @param $coreBranch
    */
   private function build(LocalApplication $app, Project $project, $profile, $noArchive, $coreBranch = NULL) {
-    $this->stdErr->writeln('<info>[*]</info> Building <info>' . $project->getProperty('title') . '</info> (' . $project->id . ')...');
-
     // This step is not required for projects that do not
     // use external distro profiles.
     if (is_array($profile)) {
@@ -223,6 +219,8 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Build.
     $localBuildOptions['--yes'] = TRUE;
     $localBuildOptions['--source'] = $this->extCurrentProject['root_dir'];
+    $localBuildOptions['--no-build-hooks'] = TRUE;
+    $localBuildOptions['--no-deps'] = TRUE;
     $localBuildOptions['app'] = [$app->getId()];
     if ($noArchive) {
       $localBuildOptions['--no-archive'] = TRUE;
@@ -272,7 +270,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    */
   private function fetchProfile($profile) {
     /** @var $git GitHelper */
-    $git = $this->getHelper('git');
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $this->stdErr->writeln("<info>[*]</info> Checking out <info>" . $profile['name'] . "</info> for the first time...");
 
@@ -302,7 +300,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     ]);
     if (!empty($env)) {
       /** @var $git GitHelper */
-      $git = $this->getHelper('git');
+      $git = $this->getService('git');
       $git->ensureInstalled();
       $git->execute(array('reset', '--hard'), $this->extCurrentProject['root_dir']);
       chdir($this->extCurrentProject['root_dir']);
@@ -329,11 +327,12 @@ class DrupalDeployCommand extends ExtendedCommandBase {
    * @throws \Exception
    */
   private function updateRepository($dir, $branch = NULL) {
-    /** @var $git GitHelper */
-    $git = $this->getHelper('git');
+    /** @var \Platformsh\Cli\Service\Git $git */
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($dir);
-    $this->stdErr->write(sprintf("<info>[*]</info> Updating <info>%s/%s</info>...", basename(str_ireplace(':', '/', $git->getConfig('remote.origin.url')), '.git'), $git->getCurrentBranch()));
+    $remote = $git->getConfig('remote.origin.url') ?: $git->getConfig('remote.platform.url');
+    $this->stdErr->write(sprintf("<info>[*]</info> Updating <info>%s/%s</info>...", basename(str_ireplace(':', '/', $remote), '.git'), $git->getCurrentBranch()));
     if (!empty($branch)) {
       $git->checkOut($branch, $dir);
     }
@@ -355,7 +354,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
 
-    $sh = new ShellHelper();
+    $sh = new Shell();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
       if ($hook != "cd " . $app->getDocumentRoot()) {
         if (strlen($hook) > 0) {
