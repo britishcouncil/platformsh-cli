@@ -5,7 +5,6 @@ namespace Platformsh\Cli\Command\Drupal;
 use Platformsh\Cli\Command\ExtendedCommandBase;
 use Platformsh\Cli\Local\LocalApplication;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -15,8 +14,8 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
   protected function configure() {
     $this->setName('drupal:unclean-features')
          ->setAliases(array('unclean-features'))
-         ->setDescription('Show a list of unclean features.')
-         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build');
+         ->setDescription('Show a list of unclean features.');
+    $this->addAppOption();
     $this->addDirectoryArgument();
     $this->addExample('Shows all the unclean features on a given Drupal project', '/path/to/project');
   }
@@ -24,25 +23,31 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
   protected function execute(InputInterface $input, OutputInterface $output) {
     $this->validateInput($input);
     $apps = $input->getOption('app');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
-      if ($apps && !in_array($app->getId(), $apps)) {
-        continue;
-      }
-      if ($app->getConfig()['build']['flavor'] == 'drupal') {
-        $this->_execute($input, $app);
-      }
-    }
-  }
-
-  private function _execute(InputInterface $input, LocalApplication $app) {
-    $project = $this->getSelectedProject();
-
     // The output for 'drush fl' goes beyond the 90 columns.
     // For some reasons, commands run via Process (proc_open) will assume
     // a narrow terminal output. This messes the output, hence our filtering
     // on it. This is why we have this additional variable put into the ENV
     // before running the process.
     putenv('COLUMNS=512');
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
+      // If --app was specified, only allow those apps.
+      if ($apps && !in_array($app->getId(), $apps)) {
+        continue;
+      }
+      // Also, only allow Drupal apps.
+      if ($app->getConfig()['build']['flavor'] == 'drupal') {
+        $this->_execute($input, $app);
+      }
+    }
+    // Reset.
+    putenv('COLUMNS');
+  }
+
+  /**
+   * Helper function.
+   */
+  private function _execute(InputInterface $input, LocalApplication $app) {
+    $project = $this->getSelectedProject();
     $alias = basename(realpath($input->getArgument('directory')));
     $p = new Process("drush @$alias._local--" . $app->getId() . " fl --status=enabled");
     $p->setTimeout($this->config()->get('local.deploy.external_process_timeout'));
