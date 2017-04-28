@@ -7,6 +7,7 @@ use Platformsh\Cli\Local\LocalApplication;
 use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 
@@ -107,7 +108,7 @@ abstract class ExtendedCommandBase extends CommandBase {
         foreach ($projects as $pid => $project) {
           $projects[$pid] = $project->getProperty('title');
         }
-        $qh = $this->getHelper('question');
+        $qh = $this->getService('question_helper');
         return $qh->choose($projects, 'More than one project matched. Please, choose the one you desire to deploy:', $input, $output);
     }
   }
@@ -135,12 +136,22 @@ abstract class ExtendedCommandBase extends CommandBase {
   }
 
   /**
+   * Override CommandBase::addAppOption().
+   *
+   * @see \Platformsh\Cli\Command\CommandBase::addAppOption();
+   */
+  protected function addAppOption() {
+    $this->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build');
+    return $this;
+  }
+
+  /**
    * Check if GitHub integration is available by verifying the existence of the
    * expected GitHub repository.
    * @return bool|string
    */
   protected function gitHubIntegrationAvailable() {
-    $git = $this->getHelper('git');
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
     return $git->execute([
@@ -170,7 +181,7 @@ abstract class ExtendedCommandBase extends CommandBase {
     // Write file that indicates an integration is enabled.
     // Save original git URI in it.
     chdir($this->extCurrentProject['repository_dir']);
-    $git = $this->getHelper('git');
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
     file_put_contents($this->extCurrentProject['root_dir'] . '/' . $this->config()->get('local.integration.github_local_flag_file'),
@@ -207,7 +218,7 @@ abstract class ExtendedCommandBase extends CommandBase {
    */
   public function disableGitHubIntegration() {
     chdir($this->extCurrentProject['repository_dir']);
-    $git = $this->getHelper('git');
+    $git = $this->getService('git');
     $git->ensureInstalled();
     $git->setDefaultRepositoryDir($this->extCurrentProject['repository_dir']);
     // Retrieve original git URI.
