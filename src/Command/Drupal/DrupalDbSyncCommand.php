@@ -19,8 +19,8 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
          ->setAliases(array('db-sync'))
          ->setDescription('Synchronize local database with designated remote')
          ->addOption('no-sanitize', 'S', InputOption::VALUE_NONE, 'Do not perform database sanitization.')
-         ->addOption('no-cache', 'C', InputOption::VALUE_NONE, 'Fetch a fresh copy of the database.')
-         ->addOption('app', NULL, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'Specify application(s) to build');
+         ->addOption('no-cache', 'C', InputOption::VALUE_NONE, 'Fetch a fresh copy of the database.');
+    $this->addAppOption();
     $this->addDirectoryArgument();
     $this->addEnvironmentOption();
     $this->addExample('Synchronize database of a Drupal project from daily backup', '-e environmentID /path/to/project')
