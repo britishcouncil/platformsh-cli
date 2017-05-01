@@ -39,7 +39,7 @@ local:
     external_process_timeout: 0.0 # = null = infinite
     # This variable must be set on the backup environment for each project.
     internal_site_code_variable: 'SITE_CODE'
-    local_domain: '.local.artetecha.com'
+    local_domain: '.local.solas.britishcouncil.digital'
 
   stack:
     mysql_user: 'user'
@@ -53,8 +53,8 @@ local:
     elasticsearch_port: 9200
 
   integration:
-    github_base_uri: 'git@github.com:artetecha'
-    github_repo_prefix: 'int_'
+    github_base_uri: 'git@github.com:britishcouncil'
+    github_repo_prefix: 'solas_'
     github_default_branch: 'qa'
     github_local_flag_file: '.github-integration-active'
 
