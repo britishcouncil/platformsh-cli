@@ -1,7 +1,7 @@
 # Metadata about the CLI application itself.
 application:
   name: 'Platform.sh CLI'
-  version: '3.15.2'
+  version: '3.15.3'
   executable: 'platform'
   phar: 'platform.phar'
   package_name: 'platformsh/cli'
@@ -107,7 +107,7 @@ detection:
 # Automatic updates.
 # This can be overridden in the user config file.
 updates:
-  last_checked: null
+  last_checked: ~
   check_interval: 86400
 
   # Overridden by {application.env_prefix}UPDATES_CHECK env var.
