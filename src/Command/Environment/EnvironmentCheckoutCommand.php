@@ -1,7 +1,7 @@
 <?php
 namespace Platformsh\Cli\Command\Environment;
 
-use Platformsh\Cli\Command\ExtendedCommandBase;
+use Platformsh\Cli\Command\CommandBase;
 use Platformsh\Cli\Exception\RootNotFoundException;
 use Platformsh\Cli\Service\Ssh;
 use Platformsh\Client\Model\Project;
@@ -9,7 +9,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class EnvironmentCheckoutCommand extends ExtendedCommandBase
+class EnvironmentCheckoutCommand extends CommandBase
 {
 
     protected function configure()
