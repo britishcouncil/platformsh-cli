@@ -2,9 +2,10 @@
 namespace Platformsh\Cli\Command\Project;
 
 use Cocur\Slugify\Slugify;
-use Platformsh\Cli\Command\ExtendedCommandBase;
+use Platformsh\Cli\Command\CommandBase;
 use Platformsh\Cli\Local\BuildFlavor\Drupal;
 use Platformsh\Cli\Service\Ssh;
+use Platformsh\Client\Model\Project;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,7 +13,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
-class ProjectGetCommand extends ExtendedCommandBase
+class ProjectGetCommand extends CommandBase
 {
     protected $projectRoot;
 
