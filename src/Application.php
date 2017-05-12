@@ -93,6 +93,7 @@ class Application extends ParentApplication
         $commands[] = new Command\App\AppConfigGetCommand();
         $commands[] = new Command\App\AppListCommand();
         $commands[] = new Command\Auth\AuthInfoCommand();
+        $commands[] = new Command\Auth\AuthTokenCommand();
         $commands[] = new Command\Auth\LogoutCommand();
         $commands[] = new Command\Auth\LoginCommand();
         $commands[] = new Command\Certificate\CertificateAddCommand();
@@ -139,6 +140,7 @@ class Application extends ParentApplication
         $commands[] = new Command\Local\LocalDirCommand();
         $commands[] = new Command\Local\LocalDropDatabasesCommand();
         $commands[] = new Command\Local\LocalDrushAliasesCommand();
+        $commands[] = new Command\Project\ProjectCurlCommand();
         $commands[] = new Command\Project\ProjectCreateCommand();
         $commands[] = new Command\Project\ProjectDeleteCommand();
         $commands[] = new Command\Project\ProjectDisableGithubIntegrationCommand();
