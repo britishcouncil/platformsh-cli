@@ -16,6 +16,16 @@ use Symfony\Component\Filesystem\Filesystem;
 
 class DrupalDeployCommand extends ExtendedCommandBase {
 
+  protected $shellHelper;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct($name = null) {
+    parent::__construct();
+    $this->shellHelper = new Shell();
+  }
+
   protected function configure() {
     $this->setName('drupal:deploy')
          ->setAliases(array('deploy'))
@@ -147,6 +157,10 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         // Create Elastic Search indices.
         $_reindex = $this->createElasticSearchIndices($project, $app);
       }
+
+      // Run post-build hooks.
+      $this->runPostBuildHooks($app->getConfig(), $this->extCurrentProject['www_dir'] . '/' . $app->getId());
+
 
       // DB sanitize.
       if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
@@ -354,21 +368,56 @@ class DrupalDeployCommand extends ExtendedCommandBase {
 
     $this->stdErr->writeln("<info>[*]</info> Executing deployment hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
 
-    $sh = new Shell();
+    $project_dir = $this->extCurrentProject['www_dir'] . '/' . $app->getId();
     foreach (explode("\n", $appConfig['hooks']['deploy']) as $hook) {
       if ($hook != "cd " . $app->getDocumentRoot()) {
         if (strlen($hook) > 0) {
           $this->stdErr->writeln("Running <info>$hook</info>");
           if (stripos($hook, 'updb')) {
-            $sh->executeSimple($hook, $this->extCurrentProject['www_dir'] . '/' . $app->getId());
+            $this->shellHelper->executeSimple($hook, $project_dir);
           }
           else {
-            $sh->execute(explode(' ', $hook), $this->extCurrentProject['www_dir'] . '/' . $app->getId());
+            $this->shellHelper->execute(explode(' ', $hook), $project_dir);
           }
         }
       }
     }
   }
+
+  /**
+   * Execute the post-build hooks.
+   * @param $project
+   */
+  protected function runPostBuildHooks(array $appConfig, $buildDir) {
+        $result = TRUE;
+        if (!isset($appConfig['hooks']['build'])) {
+            return null;
+        }
+        $this->output->writeln('Running post-build hooks adapted to local environment.');
+
+        $currentDir = $buildDir;
+        // Run modified hooks to account for a different folder structure (no /public folder).
+        foreach (explode(PHP_EOL, $appConfig['hooks']['build']) as $hook) {
+            if (empty(trim($hook)) || trim($hook) == 'cd public') {
+                continue;
+            }
+            if (substr(trim($hook), 0, 3) === 'cd ') {
+              $path = substr(trim($hook), 3);
+              $currentDir .= '/' . $path;
+              continue;
+            }
+            if (strpos($hook, 'public/') !== FALSE) {
+                $hook = strtr($hook, 'public/', '');
+            }
+
+            $this->stdErr->writeln("Running <info>$hook</info> in <info>$currentDir</info>");
+            if (!$this->shellHelper->executeSimple($hook, $currentDir)) {
+                $result = FALSE;
+            }
+        }
+
+        return $result;
+    }
 
   /**
    * Clean up old builds for the project and keep only the latest.
@@ -449,9 +498,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
     // Symlink various resources.
     $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/settings'] = $profileDir . $resource_dir . '/settings';
     $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/sureroute-test-object.html'] = $profileDir . $resource_dir . '/sureroute-test-object.html';
-    $linkMap[$wwwDir . '/sureroute-test-object.html'] = $profileDir . $resource_dir . '/sureroute-test-object.html';
     $linkMap[$wwwDir . '/profiles/' . $profileName . $resource_dir . '/humans.txt'] = $profileDir . $resource_dir . '/humans.txt';
-    $linkMap[$wwwDir . '/humans.txt'] = $profileDir . $resource_dir . '/humans.txt';
 
     return $linkMap;
   }
