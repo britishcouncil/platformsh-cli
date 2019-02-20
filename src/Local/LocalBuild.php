@@ -390,7 +390,7 @@ class LocalBuild
             return null;
         }
         if (!empty($this->settings['no-build-hooks'])) {
-            $this->output->writeln('Skipping post-build hooks');
+            $this->output->writeln('Skipping post-build hooks at this point.');
             return null;
         }
         $this->output->writeln('Running post-build hooks');

@@ -29,7 +29,7 @@ class DrupalUncleanFeaturesCommand extends ExtendedCommandBase {
     // on it. This is why we have this additional variable put into the ENV
     // before running the process.
     putenv('COLUMNS=512');
-    foreach (LocalApplication::getApplications($this->getProjectRoot(), $this->config) as $app) {
+    foreach (LocalApplication::getApplications($this->getProjectRoot(), NULL) as $app) {
       // If --app was specified, only allow those apps.
       if ($apps && !in_array($app->getId(), $apps)) {
         continue;
