@@ -159,6 +159,7 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       }
 
       // Run post-build hooks.
+      $this->stdErr->writeln("<info>[*]</info> Executing post-build hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
       $this->runPostBuildHooks($app->getConfig(), $this->extCurrentProject['www_dir'] . '/' . $app->getId());
 
 
@@ -393,7 +394,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
         if (!isset($appConfig['hooks']['build'])) {
             return null;
         }
-        $this->output->writeln('Running post-build hooks adapted to local environment.');
 
         $currentDir = $buildDir;
         // Run modified hooks to account for a different folder structure (no /public folder).
