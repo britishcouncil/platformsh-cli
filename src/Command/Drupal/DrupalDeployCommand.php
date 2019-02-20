@@ -162,7 +162,6 @@ class DrupalDeployCommand extends ExtendedCommandBase {
       $this->stdErr->writeln("<info>[*]</info> Executing post-build hooks for <info>$project->id" . '-' . $app->getId() . "</info>...");
       $this->runPostBuildHooks($app->getConfig(), $this->extCurrentProject['www_dir'] . '/' . $app->getId());
 
-
       // DB sanitize.
       if ($input->getOption('db-sync') && !$input->getOption('no-sanitize')) {
         $this->runOtherCommand('drupal:db-sanitize', [
