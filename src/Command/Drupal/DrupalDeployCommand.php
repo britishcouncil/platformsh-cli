@@ -400,13 +400,13 @@ class DrupalDeployCommand extends ExtendedCommandBase {
             if (empty(trim($hook)) || trim($hook) == 'cd public') {
                 continue;
             }
+            if (strpos($hook, 'public/') !== FALSE) {
+                $hook = strtr($hook, 'public/', '');
+            }
             if (substr(trim($hook), 0, 3) === 'cd ') {
               $path = substr(trim($hook), 3);
               $currentDir .= '/' . $path;
               continue;
-            }
-            if (strpos($hook, 'public/') !== FALSE) {
-                $hook = strtr($hook, 'public/', '');
             }
 
             $this->stdErr->writeln("Running <info>$hook</info> in <info>$currentDir</info>");
