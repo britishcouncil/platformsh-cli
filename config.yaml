@@ -27,7 +27,7 @@ local:
 
     drupal:
         profiles_dir: "/app/profiles"
-        sites_dir: "/app/sites"
+        sites_dir: "/var/www/sites"
 
     deploy:
         git_default_branch: "qa"

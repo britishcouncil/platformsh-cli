@@ -89,7 +89,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
         "CREATE DATABASE IF NOT EXISTS $dbName",
         "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON $dbName.* TO '" . $this->config()->get('local.stack.mysql_user') . "'@'" . $this->config()->get('local.stack.mysql_host') . "' IDENTIFIED BY '" . $this->config()->get('local.stack.mysql_password') . "';"
       );
-      if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), $this->config()->get('local.stack.mysql_root_password'))) {
+      if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'))) {
         foreach ($queries as $q) {
           mysqli_query($connection, $q);
         }
@@ -101,7 +101,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
       }
 
       // Use mysql CLI for importing the SQL dump, as it's much more efficient.
-      $cmd = sprintf("cat %s | mysql -h%s -u%s -p%s --database %s", $backupPath, $this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), $this->config()->get('local.stack.mysql_root_password'), $dbName);
+      $cmd = sprintf("cat %s | mysql -h%s -u%s --database %s", $backupPath, $this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), $dbName);
       $p = new Process($cmd);
       $p->setTimeout($this->config()->get('local.deploy.external_process_timeout'));
       try {
@@ -127,4 +127,3 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
     }
   }
 }
-
