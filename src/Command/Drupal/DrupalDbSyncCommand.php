@@ -89,7 +89,7 @@ class DrupalDbSyncCommand extends ExtendedCommandBase {
         "CREATE DATABASE IF NOT EXISTS $dbName",
         "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON $dbName.* TO '" . $this->config()->get('local.stack.mysql_user') . "'@'" . $this->config()->get('local.stack.mysql_host') . "' IDENTIFIED BY '" . $this->config()->get('local.stack.mysql_password') . "';"
       );
-      if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'))) {
+      if ($connection = mysqli_connect($this->config()->get('local.stack.mysql_host'), $this->config()->get('local.stack.mysql_root_user'), '')) {
         foreach ($queries as $q) {
           mysqli_query($connection, $q);
         }
