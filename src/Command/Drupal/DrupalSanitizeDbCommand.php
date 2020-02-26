@@ -55,7 +55,8 @@ class DrupalSanitizeDbCommand extends ExtendedCommandBase {
       $dh->execute([
         '-y',
         'sql-sanitize',
-        '--sanitize-email="%name@example.com"'
+        '--sanitize-email="%name@example.com"',
+        '--sanitize-password=password'
       ], $wwwRoot, TRUE);
     }
     catch (\Exception $e) {
